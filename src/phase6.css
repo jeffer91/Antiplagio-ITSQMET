@@ -1,0 +1,56 @@
+.citation-panel { margin-top: 18px; padding: 22px; border: 1px solid #e1e7ef; border-radius: 16px; background: #fbfcfe; }
+.citation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.citation-heading h3 { margin: 3px 0 7px; font-size: 20px; }
+.citation-heading p { max-width: 760px; margin: 0; color: #718096; font-size: 13px; line-height: 1.55; }
+.citation-score { min-width: 112px; padding: 13px 15px; border-radius: 13px; color: #5a4215; background: #fff4d8; text-align: center; }
+.citation-score strong, .citation-score span { display: block; }
+.citation-score strong { font-size: 24px; }
+.citation-score span { margin-top: 2px; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.citation-empty { margin-top: 15px; padding: 17px; border: 1px dashed #d5deea; border-radius: 12px; background: white; }
+.citation-empty p { margin: 0 0 12px; color: #6f7d90; font-size: 13px; }
+.citation-running { display: flex; align-items: center; gap: 12px; margin-top: 15px; padding: 14px 16px; border-radius: 11px; color: #4e5b70; background: #f0f5fa; }
+.citation-running strong, .citation-running small { display: block; }
+.citation-running small { margin-top: 3px; color: #8390a1; }
+.citation-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.citation-stats span { padding: 11px 10px; border: 1px solid #e4e9ef; border-radius: 10px; color: #748094; background: white; font-size: 10px; text-align: center; }
+.citation-stats strong { display: block; margin-bottom: 3px; color: #263247; font-size: 18px; }
+.citation-meta { margin-top: 10px; color: #8a96a6; font-size: 11px; }
+.citation-global-issues { margin-top: 15px; padding: 14px; border: 1px solid #f0d7a9; border-radius: 11px; background: #fff9ed; }
+.citation-global-issues > strong { display: block; margin-bottom: 8px; color: #77551a; font-size: 12px; }
+.citation-global-issues > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.citation-global-issues span, .citation-issue-chips span { padding: 5px 7px; border-radius: 7px; color: #795914; background: #fff1c8; font-size: 10px; font-weight: 750; }
+.citation-section { margin-top: 18px; }
+.citation-section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.citation-section-title strong { color: #29364b; font-size: 13px; }
+.citation-section-title span { color: #8b97a7; font-size: 10px; }
+.citation-mention-list { display: grid; gap: 7px; }
+.citation-mention { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; border: 1px solid #e4e9ef; border-radius: 9px; background: white; }
+.citation-mention strong { color: #39465a; font-size: 12px; }
+.citation-mention span { color: #8792a2; font-size: 10px; text-align: right; }
+.citation-mention.unlinked { border-left: 3px solid #d76565; }
+.citation-mention.ambiguous { border-left: 3px solid #d89a37; }
+.citation-reference-list { display: grid; gap: 9px; }
+.citation-reference { padding: 14px; border: 1px solid #e2e8ef; border-radius: 12px; background: white; }
+.citation-reference.verified { border-left: 4px solid #29a474; }
+.citation-reference.probable { border-left: 4px solid #d49b35; }
+.citation-reference.not_found { border-left: 4px solid #d46161; }
+.citation-reference.incomplete { border-left: 4px solid #9ba7b6; }
+.citation-reference-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.citation-reference-number { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: white; background: #364b67; font-size: 11px; font-weight: 900; }
+.citation-reference-head strong, .citation-reference-head small { display: block; }
+.citation-reference-head strong { color: #263247; font-size: 12px; line-height: 1.4; }
+.citation-reference-head small { margin-top: 4px; color: #8a96a6; font-size: 10px; }
+.citation-verification { padding: 5px 7px; border-radius: 999px; font-size: 9px; font-weight: 900; white-space: nowrap; text-transform: uppercase; }
+.citation-verification.verified { color: #197451; background: #e5f7ef; }
+.citation-verification.probable { color: #8a5b0a; background: #fff1ce; }
+.citation-verification.not_found { color: #993e3e; background: #ffeded; }
+.citation-verification.incomplete { color: #626f80; background: #eef1f5; }
+.citation-raw-reference { margin: 10px 0 0; color: #59667a; font-size: 11px; line-height: 1.55; }
+.citation-verification-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; color: #7b8797; font-size: 10px; }
+.citation-verification-detail a { color: #167653; font-weight: 800; text-decoration: none; }
+.citation-issue-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.citation-uncited-note { display: flex; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 13px 14px; border-radius: 10px; color: #6f5420; background: #fff8e8; font-size: 11px; }
+.citation-uncited-note span { color: #8a744a; text-align: right; }
+.citation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #e7ecf2; }
+@media (max-width: 1100px) { .citation-stats { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 760px) { .citation-heading { flex-direction: column; } .citation-score { width: 100%; } .citation-stats { grid-template-columns: repeat(2, 1fr); } .citation-reference-head { grid-template-columns: 28px 1fr; } .citation-verification { grid-column: 2; width: fit-content; } .citation-section-title, .citation-uncited-note { flex-direction: column; } .citation-uncited-note span { text-align: left; } }
