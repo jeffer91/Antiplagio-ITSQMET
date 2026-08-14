@@ -1,120 +1,106 @@
 # SIAI — Antiplagio ITSQMET
 
-Sistema de Integridad Académica Institucional. Aplicación Electron para entregas académicas, similitud interna y externa, revisión de citas y bibliografía, trazabilidad de versiones e indicadores de uso probable de IA.
+Sistema de Integridad Académica Institucional. Aplicación Electron para entregas académicas, similitud interna y externa, revisión de citas y bibliografía, trazabilidad de versiones e indicadores de escritura asistida por IA.
 
 ## Estado
 
-**Fase 6 — Citas, referencias y APA 7**
+**Fase 7 — Indicadores de escritura asistida por IA**
 
 - Electron + React + TypeScript + Vite.
 - Supabase Auth con roles `student` y `coordinator`.
 - PDF y DOCX de hasta 25 MB, Storage privado, SHA-256 y versiones inmutables.
-- Extracción de texto y detección de PDF que requiere OCR.
 - Similitud institucional contra el corpus ITSQMET.
-- Informe interactivo con texto resaltado, fuentes numeradas, exclusiones y porcentaje ajustado.
-- Búsqueda externa mediante Edge Function con OpenAlex, CORE, Semantic Scholar, Crossref y búsqueda web opcional.
-- Fuentes externas no verificables se muestran como candidatos y no aumentan el porcentaje.
-- Revisión de citas autor-fecha contra la bibliografía del documento.
-- Detección de citas sin referencia, citas ambiguas y referencias no citadas.
-- Verificación bibliográfica mediante Crossref y OpenAlex.
-- Clasificación de referencias como `verified`, `probable`, `not_found` o `incomplete`.
-- Detección de DOI, título, autor y año para contrastar metadatos.
-- Hallazgos APA 7: campos faltantes, DOI no canónico, posibles duplicados y orden alfabético.
-- El estudiante solo puede ver los análisis que el coordinador libera.
-- CI valida la aplicación y las Edge Functions con TypeScript/Deno.
+- Informe interactivo con fuentes, exclusiones y porcentaje ajustado.
+- Búsqueda externa con OpenAlex, CORE, Semantic Scholar, Crossref y web opcional.
+- Revisión de citas, referencias y hallazgos APA 7.
+- Indicadores estilométricos por fragmento, separados del porcentaje de similitud.
+- Comparación con el estilo interno del documento y, cuando existe suficiente material, con versiones previas del estudiante.
+- Revisión humana por fragmento: revisar, solicitar explicación o descartar alerta.
+- Las alertas descartadas por el coordinador no se muestran al estudiante cuando se libera el informe.
+- CI valida la aplicación y las tres Edge Functions con TypeScript/Deno.
 
-## Principio de la Fase 6
+## Principio de la Fase 7
 
-SIAI separa tres conceptos que no deben confundirse:
+SIAI **no presenta el índice de IA como una probabilidad de autoría**. Un resultado como `74/100` significa que el fragmento reúne varias señales que justifican revisión; no significa “74 % de probabilidad de que ChatGPT lo haya escrito”.
 
-1. **Existencia de la fuente:** una referencia puede verificarse contra registros públicos.
-2. **Relación cita ↔ referencia:** una cita del cuerpo debe poder enlazarse con una entrada de la bibliografía.
-3. **Formato APA:** una fuente puede existir y estar bien citada, pero tener problemas de formato.
-
-Una referencia marcada como **No localizada** significa que SIAI no encontró una coincidencia suficientemente fiable en los servicios consultados. No constituye por sí sola una conclusión de que la referencia haya sido inventada.
-
-## Revisión bibliográfica
-
-La Edge Function `citation-integrity`:
+El motor `siai-ai-evidence-v1` trabaja así:
 
 ```text
 Documento
    ↓
-Detectar sección Referencias / Bibliografía
+Excluir bibliografía y reducir el peso de citas textuales largas
    ↓
-Separar y parsear referencias
+Dividir el cuerpo en fragmentos de tamaño comparable
    ↓
-Detectar citas autor-fecha en el cuerpo
+Extraer rasgos estilométricos
    ↓
-Vincular cita ↔ referencia por autor + año
+Comparar cada fragmento con el resto del documento
    ↓
-Consultar Crossref
+Comparar con versiones previas del estudiante cuando existen
    ↓
-Consultar OpenAlex como apoyo cuando está configurado
+Combinar señales independientes
    ↓
-Comparar título + autor + año + DOI
+Índice de evidencia + fragmentos señalados
    ↓
-Guardar verificación + hallazgos APA
+Revisión humana del coordinador
 ```
 
-### Estados de una referencia
+## Señales utilizadas
 
-- **Verificada:** existe una coincidencia bibliográfica de alta confianza.
-- **Coincidencia probable:** existe una candidata razonable, pero debe revisarse manualmente.
-- **No localizada:** los servicios respondieron, pero no apareció una coincidencia suficientemente fiable.
-- **No verificable:** faltan datos o los servicios no estuvieron disponibles.
+La primera versión del motor combina, entre otras:
 
-## APA 7 en esta fase
+- **Cambio de estilo dentro del documento:** distancia entre un fragmento y el patrón estilométrico general del texto.
+- **Diferencia frente al historial del estudiante:** se activa cuando hay suficiente texto en versiones anteriores.
+- **Uniformidad de longitud de oraciones:** identifica segmentos con una regularidad inusual respecto del resto.
+- **Repetición de secuencias:** mide repetición de trigramas dentro del fragmento.
+- **Conectores formulaicos:** frecuencia de expresiones académicas muy repetitivas.
+- **Inicio repetitivo de oraciones:** regularidad en la apertura de las frases.
+- **Novedad frente a la versión anterior:** aporta contexto cuando aparece un bloque completamente nuevo; por sí sola no eleva una acusación.
 
-SIAI puede señalar automáticamente:
+Una señal aislada no genera automáticamente un nivel alto. El motor exige varias señales fuertes y al menos una diferencia estilométrica relevante para clasificar un fragmento como **evidencia alta**.
 
-- autor no identificable;
-- año ausente;
-- título no identificable;
-- DOI escrito en un formato distinto de `https://doi.org/...`;
-- posible referencia duplicada;
-- bibliografía posiblemente fuera de orden alfabético;
-- encabezado de bibliografía no detectado.
+## Niveles
 
-La extracción de texto no conserva todos los atributos visuales del documento, por lo que esta fase **no afirma comprobar sangría francesa, cursivas, interlineado o tipografía**. Esos elementos requieren análisis de formato del archivo original y no se califican como correctos o incorrectos a partir del texto plano.
+- **Baja:** el fragmento no reúne evidencia suficiente para priorizarlo.
+- **Media:** conviene una revisión humana.
+- **Alta:** varias señales independientes coinciden y el fragmento merece una revisión prioritaria.
 
-## Citas dentro del texto
+El informe muestra también el porcentaje de palabras que pertenecen a fragmentos de evidencia media o alta. Ese porcentaje es independiente de la similitud institucional y externa.
 
-Actualmente se detectan principalmente patrones autor-fecha del tipo:
+## Línea base del estudiante
 
-```text
-(Pérez, 2024)
-(Pérez & Gómez, 2024)
-(Pérez et al., 2024)
-Pérez (2024)
-```
+SIAI intenta construir una línea base con hasta seis versiones previas accesibles del mismo estudiante. Si dispone de al menos una cantidad mínima de texto útil, compara los fragmentos actuales con ese historial.
 
-También se separan varias citas dentro del mismo paréntesis cuando están delimitadas por punto y coma.
+Si no existe suficiente historial, usa el patrón interno del propio documento. El informe indica claramente cuál de estos estados se utilizó:
 
-El enlace se realiza por autor principal + año. Si existen dos referencias con la misma combinación y no puede determinarse una sola, la cita queda como **ambigua** y se solicita revisión manual.
+- `student_history`
+- `document_internal`
+- `limited`
 
-## Fuentes de verificación
+## Revisión humana
 
-### Crossref
+Cada fragmento señalado permite al coordinador elegir:
 
-Es el verificador bibliográfico principal. Si la referencia contiene DOI, se intenta resolver directamente. Si no, SIAI realiza una búsqueda bibliográfica y compara metadatos.
+- **Sin revisar**
+- **Revisar**
+- **Solicitar explicación**
+- **Descartar alerta**
 
-`CROSSREF_MAILTO` es opcional y permite identificar las solicitudes institucionales.
+También puede registrar una observación interna. Las decisiones quedan persistidas en Supabase.
 
-### OpenAlex
+Cuando una alerta se marca como **Descartar alerta**, el estudiante no la recibe en el informe liberado. Esto permite corregir falsos positivos antes de compartir el resultado.
 
-Se usa como segundo verificador cuando `OPENALEX_API_KEY` está configurado. SIAI busca por título y compara autor, año, DOI y similitud del título.
+## Privacidad
 
-## Privacidad y seguridad
+La Fase 7 no necesita enviar el documento a un proveedor externo de “detección de IA”. El análisis estilométrico se ejecuta dentro de la Edge Function `ai-writing-indicators` con los textos ya almacenados en Supabase.
 
-Las claves de proveedores nunca se guardan en variables `VITE_*` ni dentro del renderer de Electron.
-
-La revisión bibliográfica se ejecuta en Supabase Edge Functions. El estudiante:
+El estudiante:
 
 - solo puede leer sus propios documentos;
-- no puede iniciar la verificación bibliográfica;
-- no puede cambiar resultados ni estados;
-- solo puede ver el informe cuando el coordinador lo libera.
+- no puede ejecutar el análisis de IA;
+- no puede cambiar índices o decisiones del coordinador;
+- solo puede ver el informe cuando el coordinador lo libera;
+- no ve alertas descartadas por revisión humana.
 
 ## Preparar Supabase
 
@@ -126,8 +112,9 @@ En un proyecto nuevo ejecuta, en este orden:
 4. `supabase/phase4.sql`
 5. `supabase/phase5.sql`
 6. `supabase/phase6.sql`
+7. `supabase/phase7.sql`
 
-Después crea tu cuenta y convierte únicamente la cuenta administrativa en coordinador:
+Después convierte únicamente la cuenta administrativa en coordinador:
 
 ```sql
 update public.profiles
@@ -135,32 +122,19 @@ set role = 'coordinator'
 where email = 'TU_CORREO';
 ```
 
-Las cuentas creadas desde la aplicación permanecen como `student`.
+## Edge Functions
 
-## Configurar Edge Functions
+Para las fases de búsqueda externa y bibliografía, configura los secretos necesarios según `supabase/functions/.env.example`.
 
-Los secretos esperados están documentados en:
-
-```text
-supabase/functions/.env.example
-```
-
-Ejemplo:
-
-```powershell
-supabase secrets set OPENALEX_API_KEY="TU_CLAVE"
-supabase secrets set CORE_API_KEY="TU_CLAVE"
-supabase secrets set SEMANTIC_SCHOLAR_API_KEY="TU_CLAVE"
-supabase secrets set BRAVE_SEARCH_API_KEY="TU_CLAVE"
-supabase secrets set CROSSREF_MAILTO="correo@institucion.edu.ec"
-```
-
-Despliega las dos funciones actuales:
+Despliega las tres funciones actuales:
 
 ```powershell
 supabase functions deploy external-similarity
 supabase functions deploy citation-integrity
+supabase functions deploy ai-writing-indicators
 ```
+
+`ai-writing-indicators` no requiere una clave privada de un proveedor de detección de IA.
 
 ## Flujo actual
 
@@ -175,13 +149,11 @@ Informe interactivo + exclusiones
         ↓
 Búsqueda externa pública
         ↓
-Revisión de citas y bibliografía
+Citas + bibliografía + APA 7
         ↓
-Crossref / OpenAlex
+Indicadores de escritura asistida por IA
         ↓
-Citas sin referencia + referencias no citadas
-        ↓
-Hallazgos APA 7
+Revisión humana por fragmento
         ↓
 Coordinador libera u oculta cada informe
 ```
@@ -215,7 +187,7 @@ npm run build
 GitHub Actions también ejecuta:
 
 ```text
-deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts
+deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts supabase/functions/ai-writing-indicators/index.ts
 ```
 
 ## Estructura relevante
@@ -227,19 +199,23 @@ src/
     SimilarityReportModal.tsx
     ExternalSimilarityPanel.tsx
     CitationIntegrityPanel.tsx
+    AiWritingPanel.tsx
   lib/
     documents.ts
     similarity.ts
     similarityView.ts
     externalSimilarity.ts
     citationIntegrity.ts
+    aiWriting.ts
   types/
     similarity.ts
     externalSimilarity.ts
     citationIntegrity.ts
+    aiWriting.ts
   phase4.css
   external.css
   phase6.css
+  phase7.css
 supabase/
   schema.sql
   phase2.sql
@@ -247,9 +223,11 @@ supabase/
   phase4.sql
   phase5.sql
   phase6.sql
+  phase7.sql
   functions/
     external-similarity/index.ts
     citation-integrity/index.ts
+    ai-writing-indicators/index.ts
 ```
 
 ## Ruta del proyecto
@@ -260,7 +238,7 @@ supabase/
 - Fase 4: visor interactivo + exclusiones + recálculo ✅
 - Fase 5: fuentes académicas y web públicas ✅
 - Fase 6: citas + referencias + verificación bibliográfica + APA 7 ✅
-- Fase 7: indicadores de escritura asistida por IA
+- Fase 7: indicadores de escritura asistida por IA + revisión humana ✅
 - Fase 8: informes PDF/Excel
 - Fase 9: instalador y actualizaciones
 
