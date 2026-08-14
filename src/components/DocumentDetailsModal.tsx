@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
+import { SimilarityPanel } from './SimilarityPanel';
 
 interface Props {
   document: DocumentListItem | null;
@@ -19,6 +21,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.Element | null {
+  const { profile } = useAuth();
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +48,8 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
       setError(caught instanceof Error ? caught.message : 'No fue posible abrir el archivo.');
     }
   };
+
+  const canRunSimilarity = profile?.role === 'coordinator';
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -73,6 +78,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                 <code title={version.sha256}>SHA-256 {version.sha256.slice(0, 12)}…</code>
                 <button className="secondary-button compact-button" type="button" onClick={() => void openOriginal(version)}>Abrir original</button>
               </div>
+              <SimilarityPanel version={version} canRun={canRunSimilarity} />
             </article>
           ))}
         </div>
