@@ -4,32 +4,49 @@ Sistema de Integridad Académica Institucional. Aplicación Electron orientada a
 
 ## Estado
 
-**Fase 3 — Similitud institucional**
+**Fase 4 — Informe interactivo de similitud**
 
 - Electron + React + TypeScript + Vite.
 - Supabase Auth con roles `student` y `coordinator`.
-- PDF y DOCX de hasta 25 MB.
-- Storage privado y versiones inmutables.
-- SHA-256 por archivo.
-- Extracción de texto PDF/DOCX.
-- Detección de PDF que requiere OCR.
-- Comparación contra todas las versiones disponibles del corpus institucional.
-- Exclusión automática de versiones anteriores del mismo trabajo revisado.
-- Normalización de texto y shingles de 5 palabras.
-- Detección de coincidencias textuales y modificaciones leves conservando suficiente texto común.
-- Agrupación por trabajo fuente: si una fuente tiene varias versiones, se conserva la versión con mayor evidencia para no inflar el porcentaje.
-- Cálculo de similitud mediante cobertura única de palabras del documento objetivo: un fragmento coincidente con varias fuentes no se suma varias veces.
-- Evidencia por fragmento con extracto del trabajo y extracto de la fuente.
-- Historial de ejecuciones de análisis.
-- El coordinador decide cuándo liberar un resultado al estudiante.
-- RLS para impedir que el estudiante consulte análisis no liberados o documentos ajenos.
+- Carga PDF/DOCX, Storage privado, SHA-256 y versiones inmutables.
+- Extracción de texto y detección de PDF que requiere OCR.
+- Similitud interna contra el corpus ITSQMET.
+- Exclusión automática de versiones anteriores del mismo trabajo.
+- Motor `siai-internal-shingle-v2` con cobertura exacta de palabras coincidentes.
+- Documento completo resaltado por colores según la fuente.
+- Fuentes institucionales numeradas y ordenadas por evidencia.
+- Navegación desde una fuente o coincidencia hasta el fragmento del documento.
+- Diferenciación entre coincidencia textual y coincidencia cercana.
+- Exclusión de bibliografía detectada al final del documento.
+- Exclusión de citas textuales delimitadas por comillas.
+- Exclusión manual de una fuente completa.
+- Umbral configurable para ignorar coincidencias pequeñas, entre 10 y 200 palabras.
+- Recálculo en tiempo real sin modificar el resultado original del motor.
+- Persistencia del porcentaje ajustado y de todos los filtros aplicados.
+- El estudiante puede ver únicamente informes liberados y no puede modificar exclusiones.
 - CI en GitHub para validar TypeScript y compilación.
 
-## Qué detecta la Fase 3
+## Resultado original vs. resultado ajustado
 
-El motor `siai-internal-shingle-v1` está diseñado para la **similitud interna del ITSQMET**. Detecta principalmente copia textual y modificaciones ligeras donde siguen existiendo secuencias comunes de palabras. El umbral mínimo de evidencia es de 10 palabras y las coincidencias se localizan mediante shingles de 5 palabras.
+SIAI conserva siempre dos conceptos distintos:
 
-Esta fase **no afirma detectar paráfrasis semántica profunda ni plagio externo en Internet**. Esas capas se incorporan posteriormente para evitar presentar como resuelto algo que necesita otro tipo de modelos y fuentes.
+- **Similitud original:** porcentaje calculado por el motor sobre la evidencia institucional encontrada. No se sobrescribe.
+- **Similitud ajustada:** porcentaje resultante después de aplicar las exclusiones definidas por el coordinador.
+
+Esto permite reconstruir por qué un informe pasó, por ejemplo, de `31,4 %` a `18,2 %`, sin perder la evidencia inicial.
+
+## Exclusiones de la Fase 4
+
+El coordinador puede activar o desactivar desde el informe interactivo:
+
+1. Bibliografía.
+2. Citas textuales entre comillas.
+3. Fuentes institucionales específicas.
+4. Coincidencias menores a un número mínimo de palabras.
+
+Los cambios se recalculan inmediatamente en pantalla. Solo se vuelven oficiales cuando el coordinador pulsa **Guardar ajustes**.
+
+La detección de la sección bibliográfica es heurística: SIAI busca encabezados como `Referencias`, `Referencias bibliográficas`, `Bibliografía` o `References` en la parte final del documento. El visor informa si encontró o no esa sección.
 
 ## Requisitos
 
@@ -61,6 +78,7 @@ En un proyecto nuevo ejecuta, en este orden:
 1. `supabase/schema.sql`
 2. `supabase/phase2.sql`
 3. `supabase/phase3.sql`
+4. `supabase/phase4.sql`
 
 Después crea tu cuenta y convierte únicamente la cuenta administrativa en coordinador:
 
@@ -81,28 +99,39 @@ Extracción + SHA-256 + almacenamiento privado
         ↓
 Versión V1 / V2 / V3...
         ↓
-Coordinador abre una versión
+Coordinador ejecuta similitud institucional
         ↓
-Analizar similitud interna
+Resultado original + fuentes + evidencia por palabra
         ↓
-Normalizar texto y crear fingerprints de 5 palabras
+Abrir informe interactivo
         ↓
-Comparar contra el resto del corpus ITSQMET
+Documento resaltado + fuentes numeradas
         ↓
-Agrupar fuentes y eliminar doble conteo
+Excluir bibliografía / citas / fuentes / coincidencias pequeñas
         ↓
-Guardar porcentaje + fuentes + fragmentos coincidentes
+Recalcular porcentaje en tiempo real
         ↓
-Coordinador puede liberar u ocultar el resultado al estudiante
+Guardar ajustes
+        ↓
+Liberar u ocultar el informe al estudiante
 ```
 
-Las versiones del mismo trabajo objetivo se excluyen de la comparación para evitar que una V2 obtenga un porcentaje artificialmente alto por coincidir con su propia V1.
+## Compatibilidad con análisis anteriores
+
+Los análisis creados con `siai-internal-shingle-v1` no almacenaban cobertura exacta por palabra. El visor puede abrirlos y recalcular mediante una aproximación proporcional, pero muestra una advertencia. Para obtener el comportamiento exacto de la Fase 4, ejecuta **Analizar de nuevo** y se generará un análisis `siai-internal-shingle-v2`.
 
 ## Seguridad
 
-El estudiante puede leer únicamente sus documentos y los análisis que el coordinador haya liberado. Las tablas de similitud no aceptan inserciones directas desde el cliente. La persistencia se realiza mediante `save_internal_similarity_analysis`, que valida en PostgreSQL que el usuario sea coordinador.
+El resultado original permanece inmutable. La tabla `similarity_adjustments` guarda únicamente filtros y resultado ajustado.
 
-El nombre del propietario de una fuente institucional solo se resuelve para quien tenga permiso sobre el perfil; de lo contrario la interfaz muestra `Repositorio institucional`.
+El estudiante:
+
+- solo puede leer sus documentos;
+- solo puede leer análisis liberados por el coordinador;
+- puede abrir el informe interactivo en modo lectura;
+- no puede excluir fuentes, modificar filtros ni guardar ajustes.
+
+La función `save_similarity_adjustment` valida en PostgreSQL que la operación provenga de una cuenta con rol `coordinator`.
 
 ## Desarrollo
 
@@ -122,17 +151,22 @@ npm run build
 ```text
 src/
   components/
-    SimilarityPanel.tsx          Resultado y evidencia institucional
+    SimilarityPanel.tsx
+    SimilarityReportModal.tsx
   lib/
-    documentExtractor.ts         Extracción PDF/DOCX
-    documents.ts                 Storage y versionamiento
-    similarity.ts                Motor de similitud institucional
+    documentExtractor.ts
+    documents.ts
+    similarity.ts
+    similarityView.ts
   types/
-    similarity.ts                Tipos del análisis
+    similarity.ts
+  similarity.css
+  phase4.css
 supabase/
-  schema.sql                     Fase 1: perfiles y roles
-  phase2.sql                     Documentos, versiones y Storage
-  phase3.sql                     Análisis, fuentes, coincidencias y RLS
+  schema.sql
+  phase2.sql
+  phase3.sql
+  phase4.sql
 ```
 
 ## Ruta del proyecto
@@ -140,7 +174,7 @@ supabase/
 - Fase 1: Electron + React + Supabase + roles ✅
 - Fase 2: carga PDF/DOCX + almacenamiento + versiones + extracción ✅
 - Fase 3: similitud contra corpus institucional ✅
-- Fase 4: visor interactivo tipo Turnitin + exclusiones y recálculo
+- Fase 4: visor interactivo + exclusiones + recálculo ✅
 - Fase 5: fuentes académicas y web públicas
 - Fase 6: citas, bibliografía y APA 7
 - Fase 7: indicadores de escritura asistida por IA
@@ -149,4 +183,4 @@ supabase/
 
 ## Principio del sistema
 
-SIAI presenta evidencia de similitud e indicadores para revisión académica. La decisión final corresponde a una persona responsable de la evaluación.
+SIAI presenta evidencia de similitud e indicadores para revisión académica. El porcentaje no representa por sí solo una conclusión de plagio y la decisión final corresponde a una persona responsable de la evaluación.
