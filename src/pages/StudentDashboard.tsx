@@ -33,7 +33,7 @@ export function StudentDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Portal del estudiante</span>
           <h1>Mis entregas académicas</h1>
-          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y los informes de similitud o revisión bibliográfica aparecen únicamente cuando el coordinador los libera.</p>
+          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y los informes de similitud, bibliografía o indicadores de escritura asistida aparecen únicamente cuando el coordinador los libera.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={openNew}>+ Nueva entrega</button>
       </header>
@@ -51,7 +51,7 @@ export function StudentDashboard(): React.JSX.Element {
 
       <section className="privacy-card">
         <strong>Informes controlados</strong>
-        <p>Puedes consultar únicamente tus documentos y los informes que el coordinador haya liberado. No puedes ejecutar búsquedas, modificar exclusiones ni alterar los resultados de citas y bibliografía.</p>
+        <p>Puedes consultar únicamente tus documentos y los informes que el coordinador haya liberado. Los indicadores de IA se presentan como señales para revisión, no como una acusación automática, y las alertas descartadas por el coordinador no se muestran en tu informe.</p>
       </section>
 
       <UploadDocumentModal open={uploadOpen} document={versionTarget} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
