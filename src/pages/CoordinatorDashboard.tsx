@@ -37,7 +37,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Panel del coordinador</span>
           <h1>Centro de integridad académica</h1>
-          <p>La Fase 7 añade indicadores de escritura asistida por IA basados en múltiples señales estilométricas y comparación entre versiones. El índice se presenta como evidencia para revisión, nunca como una conclusión automática de autoría.</p>
+          <p>La Fase 8 consolida toda la evidencia en informes finales versionados, verificables por SHA-256 y descargables en PDF o Excel. Los informes no sobrescriben los análisis: conservan una instantánea exacta de lo que existía al momento de generarlos.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Nuevo análisis</button>
       </header>
@@ -46,18 +46,18 @@ export function CoordinatorDashboard(): React.JSX.Element {
 
       <section className="metric-grid">
         <article className="metric-card"><span>Trabajos</span><strong>{documents.length}</strong><small>Documentos registrados</small></article>
-        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial para línea base</small></article>
-        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Disponibles para análisis integral</small></article>
+        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial institucional</small></article>
+        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Disponibles para informe integral</small></article>
         <article className="metric-card"><span>Requieren OCR</span><strong>{metrics.ocr}</strong><small>{metrics.owners} usuarios con entregas</small></article>
       </section>
 
       <section className="phase-banner">
-        <div><span className="eyebrow dark">Fase 7</span><h2>Indicadores de escritura asistida por IA</h2><p>Abre una versión y usa “Analizar indicios de IA”. SIAI divide el texto en fragmentos, compara su estilo con el resto del documento y con versiones anteriores, combina varias señales y te permite revisar, solicitar explicación o descartar cada alerta antes de liberarla.</p></div>
-        <div className="phase-steps"><span>✓ Estilometría</span><span>✓ Historial</span><span>✓ Fragmentos</span><span>✓ Revisión humana</span></div>
+        <div><span className="eyebrow dark">Fase 8</span><h2>Informes finales PDF y Excel</h2><p>Abre una versión y crea el informe final. SIAI une la cobertura de similitud interna y externa sin duplicar palabras, incorpora citas, referencias, APA e indicadores de IA, registra tu resultado final y sella la instantánea con SHA-256 antes de descargarla o liberarla.</p></div>
+        <div className="phase-steps"><span>✓ Consolidación</span><span>✓ PDF</span><span>✓ Excel</span><span>✓ SHA-256</span></div>
       </section>
 
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando documentos…</div> : documents.length === 0 ? (
-        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Sube un trabajo con texto extraíble para revisar similitud, bibliografía e indicadores de escritura asistida.</p></section>
+        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Sube un trabajo con texto extraíble para ejecutar los análisis y generar su informe final.</p></section>
       ) : <DocumentList documents={documents} showOwner onView={setDetailsTarget} />}
 
       <UploadDocumentModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
