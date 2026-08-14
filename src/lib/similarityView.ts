@@ -164,9 +164,10 @@ export function buildSimilarityViewModel(
 ): SimilarityViewModel {
   const tokens = tokenizeForViewer(text);
   const bibliographyStartChar = findBibliographyStartChar(text);
-  const bibliographyStartWord = bibliographyStartChar === null
-    ? null
-    : Math.max(0, tokens.findIndex((token) => token.start >= bibliographyStartChar));
+  const bibliographyCandidate = bibliographyStartChar === null
+    ? -1
+    : tokens.findIndex((token) => token.start >= bibliographyStartChar);
+  const bibliographyStartWord = bibliographyCandidate >= 0 ? bibliographyCandidate : null;
   const quoteRanges = findQuoteRanges(text);
   const quotedWords = wordsInsideCharRanges(tokens, quoteRanges);
   const excludedSources = new Set(settings.excluded_source_ids);
@@ -175,7 +176,9 @@ export function buildSimilarityViewModel(
   const highlights = new Map<number, ViewerHighlight>();
   const viewerMatches: ViewerMatch[] = [];
   const sourceSummaries: ViewerSourceSummary[] = [];
-  let exactCoverageAvailable = true;
+  const exactCoverageAvailable = analysis.sources.every((source) => (
+    source.matches.every((match) => Boolean(match.target_covered_ranges?.length))
+  ));
 
   analysis.sources.forEach((source, sourceIndex) => {
     const sourceId = getSourceId(source, sourceIndex);
@@ -185,7 +188,6 @@ export function buildSimilarityViewModel(
     let activeMatches = 0;
 
     source.matches.forEach((match, matchIndex) => {
-      if (!match.target_covered_ranges?.length) exactCoverageAvailable = false;
       const coveredWords = expandRanges(sanitizeRanges(match), tokens.length);
       coveredWords.forEach((word) => {
         globalBaseline.add(word);
@@ -209,7 +211,7 @@ export function buildSimilarityViewModel(
         globalActive.add(word);
         sourceActive.add(word);
         const previous = highlights.get(word);
-        if (!previous || source.matched_words > analysis.sources[previous.sourceIndex]?.matched_words) {
+        if (!previous || source.matched_words > (analysis.sources[previous.sourceIndex]?.matched_words ?? 0)) {
           highlights.set(word, {
             sourceId,
             sourceIndex,
@@ -230,39 +232,31 @@ export function buildSimilarityViewModel(
       });
     });
 
-    let adjustedSourceWords: number;
-    if (exactCoverageAvailable) {
-      adjustedSourceWords = sourceActive.size;
-    } else {
-      const ratio = sourceBaseline.size > 0 ? sourceActive.size / sourceBaseline.size : 0;
-      adjustedSourceWords = Math.round(source.matched_words * ratio);
-    }
+    const adjustedSourceWords = exactCoverageAvailable
+      ? sourceActive.size
+      : Math.round(source.matched_words * (sourceBaseline.size > 0 ? sourceActive.size / sourceBaseline.size : 0));
 
     sourceSummaries.push({
       source,
       sourceIndex,
       excluded: sourceExcluded,
-      adjustedMatchedWords: adjustedSourceWords,
-      adjustedSimilarityPercent: roundPercent((adjustedSourceWords / Math.max(1, analysis.total_words)) * 100),
+      adjustedMatchedWords: Math.min(source.matched_words, Math.max(0, adjustedSourceWords)),
+      adjustedSimilarityPercent: roundPercent((Math.min(source.matched_words, Math.max(0, adjustedSourceWords)) / Math.max(1, analysis.total_words)) * 100),
       activeMatches,
     });
   });
 
-  let adjustedMatchedWords: number;
-  if (exactCoverageAvailable) {
-    adjustedMatchedWords = globalActive.size;
-  } else {
-    const ratio = globalBaseline.size > 0 ? globalActive.size / globalBaseline.size : 0;
-    adjustedMatchedWords = Math.round(analysis.matched_words * ratio);
-  }
-  adjustedMatchedWords = Math.min(analysis.matched_words, Math.max(0, adjustedMatchedWords));
+  const computedMatchedWords = exactCoverageAvailable
+    ? globalActive.size
+    : Math.round(analysis.matched_words * (globalBaseline.size > 0 ? globalActive.size / globalBaseline.size : 0));
+  const adjustedMatchedWords = Math.min(analysis.matched_words, Math.max(0, computedMatchedWords));
 
   return {
     tokens,
     highlights,
     matches: viewerMatches,
     sources: sourceSummaries,
-    bibliographyStartWord: bibliographyStartWord >= 0 ? bibliographyStartWord : null,
+    bibliographyStartWord,
     quotedWordCount: quotedWords.size,
     adjustedMatchedWords,
     adjustedSimilarityPercent: roundPercent((adjustedMatchedWords / Math.max(1, analysis.total_words)) * 100),
