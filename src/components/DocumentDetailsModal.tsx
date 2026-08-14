@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
+import { AiWritingPanel } from './AiWritingPanel';
 import { CitationIntegrityPanel } from './CitationIntegrityPanel';
 import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
 import { SimilarityPanel } from './SimilarityPanel';
@@ -83,6 +84,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
               <SimilarityPanel version={version} canRun={canRunAnalysis} />
               <ExternalSimilarityPanel version={version} canRun={canRunAnalysis} />
               <CitationIntegrityPanel version={version} canRun={canRunAnalysis} />
+              <AiWritingPanel version={version} canRun={canRunAnalysis} />
             </article>
           ))}
         </div>
