@@ -1,106 +1,142 @@
 # SIAI — Antiplagio ITSQMET
 
-Sistema de Integridad Académica Institucional. Aplicación Electron para entregas académicas, similitud interna y externa, revisión de citas y bibliografía, trazabilidad de versiones e indicadores de escritura asistida por IA.
+Sistema de Integridad Académica Institucional. Aplicación Electron para entregas académicas, similitud interna y externa, revisión de citas y bibliografía, indicadores de escritura asistida por IA e informes finales verificables.
 
 ## Estado
 
-**Fase 7 — Indicadores de escritura asistida por IA**
+**Fase 8 — Informes finales PDF y Excel**
 
 - Electron + React + TypeScript + Vite.
 - Supabase Auth con roles `student` y `coordinator`.
 - PDF y DOCX de hasta 25 MB, Storage privado, SHA-256 y versiones inmutables.
 - Similitud institucional contra el corpus ITSQMET.
-- Informe interactivo con fuentes, exclusiones y porcentaje ajustado.
+- Informe interactivo con exclusiones y porcentaje ajustado.
 - Búsqueda externa con OpenAlex, CORE, Semantic Scholar, Crossref y web opcional.
 - Revisión de citas, referencias y hallazgos APA 7.
-- Indicadores estilométricos por fragmento, separados del porcentaje de similitud.
-- Comparación con el estilo interno del documento y, cuando existe suficiente material, con versiones previas del estudiante.
-- Revisión humana por fragmento: revisar, solicitar explicación o descartar alerta.
-- Las alertas descartadas por el coordinador no se muestran al estudiante cuando se libera el informe.
+- Indicadores estilométricos por fragmento y revisión humana.
+- Informe final consolidado con estado, observación del coordinador y trazabilidad de los análisis utilizados.
+- Exportación a PDF mediante `webContents.printToPDF` de Electron.
+- Exportación para Excel mediante SpreadsheetML compatible con Excel (`.xls`).
+- Instantáneas de informe inmutables, versionadas y selladas con SHA-256.
+- El estudiante solo puede abrir y descargar informes finales liberados por el coordinador.
 - CI valida la aplicación y las tres Edge Functions con TypeScript/Deno.
 
-## Principio de la Fase 7
+## Principio de la Fase 8
 
-SIAI **no presenta el índice de IA como una probabilidad de autoría**. Un resultado como `74/100` significa que el fragmento reúne varias señales que justifican revisión; no significa “74 % de probabilidad de que ChatGPT lo haya escrito”.
-
-El motor `siai-ai-evidence-v1` trabaja así:
+El informe final no recalcula ni sobrescribe la evidencia histórica. Cuando el coordinador crea un informe, SIAI toma una **instantánea** de los últimos análisis accesibles de esa versión:
 
 ```text
-Documento
-   ↓
-Excluir bibliografía y reducir el peso de citas textuales largas
-   ↓
-Dividir el cuerpo en fragmentos de tamaño comparable
-   ↓
-Extraer rasgos estilométricos
-   ↓
-Comparar cada fragmento con el resto del documento
-   ↓
-Comparar con versiones previas del estudiante cuando existen
-   ↓
-Combinar señales independientes
-   ↓
-Índice de evidencia + fragmentos señalados
-   ↓
-Revisión humana del coordinador
+Versión del estudiante
+        ↓
+Similitud institucional + ajustes
+        ↓
+Similitud externa verificada
+        ↓
+Citas + referencias + APA 7
+        ↓
+Indicadores de escritura asistida por IA
+        ↓
+Cobertura consolidada sin doble conteo
+        ↓
+Estado + observación del coordinador
+        ↓
+Instantánea JSON + SHA-256
+        ↓
+PDF / Excel / liberación al estudiante
 ```
 
-## Señales utilizadas
+Si después se ejecuta un análisis nuevo o cambia una exclusión, el informe anterior **no se modifica**. El coordinador crea el Informe #2, #3, etc.
 
-La primera versión del motor combina, entre otras:
+## Similitud consolidada
 
-- **Cambio de estilo dentro del documento:** distancia entre un fragmento y el patrón estilométrico general del texto.
-- **Diferencia frente al historial del estudiante:** se activa cuando hay suficiente texto en versiones anteriores.
-- **Uniformidad de longitud de oraciones:** identifica segmentos con una regularidad inusual respecto del resto.
-- **Repetición de secuencias:** mide repetición de trigramas dentro del fragmento.
-- **Conectores formulaicos:** frecuencia de expresiones académicas muy repetitivas.
-- **Inicio repetitivo de oraciones:** regularidad en la apertura de las frases.
-- **Novedad frente a la versión anterior:** aporta contexto cuando aparece un bloque completamente nuevo; por sí sola no eleva una acusación.
+SIAI no suma porcentajes internos y externos.
 
-Una señal aislada no genera automáticamente un nivel alto. El motor exige varias señales fuertes y al menos una diferencia estilométrica relevante para clasificar un fragmento como **evidencia alta**.
+Si las palabras 200–250 aparecen tanto en un trabajo del repositorio ITSQMET como en una publicación pública, esa cobertura se contabiliza una sola vez.
 
-## Niveles
+El informe conserva:
 
-- **Baja:** el fragmento no reúne evidencia suficiente para priorizarlo.
-- **Media:** conviene una revisión humana.
-- **Alta:** varias señales independientes coinciden y el fragmento merece una revisión prioritaria.
+- similitud consolidada original;
+- similitud consolidada ajustada;
+- similitud institucional original;
+- similitud institucional ajustada;
+- similitud externa verificada.
 
-El informe muestra también el porcentaje de palabras que pertenecen a fragmentos de evidencia media o alta. Ese porcentaje es independiente de la similitud institucional y externa.
+Para la consolidada ajustada se reutilizan los filtros guardados en el análisis institucional: exclusión de bibliografía, citas textuales y coincidencias pequeñas. Las exclusiones de fuentes institucionales se respetan únicamente sobre las fuentes institucionales correspondientes.
 
-## Línea base del estudiante
+## Contenido del PDF
 
-SIAI intenta construir una línea base con hasta seis versiones previas accesibles del mismo estudiante. Si dispone de al menos una cantidad mínima de texto útil, compara los fragmentos actuales con ese historial.
+El PDF incluye:
 
-Si no existe suficiente historial, usa el patrón interno del propio documento. El informe indica claramente cuál de estos estados se utilizó:
+1. identificación del estudiante, trabajo, versión y archivo;
+2. SHA-256 del archivo original;
+3. resultado/estado definido por el coordinador;
+4. observación final;
+5. resumen ejecutivo de indicadores;
+6. similitud institucional y fuentes;
+7. similitud externa verificada y fuentes;
+8. citas, referencias y APA 7;
+9. indicadores de escritura asistida por IA no descartados;
+10. identificadores de los análisis utilizados;
+11. SHA-256 de la instantánea del informe;
+12. nota de interpretación académica.
 
-- `student_history`
-- `document_internal`
-- `limited`
+El PDF se genera localmente desde Electron y se guarda en la ubicación elegida por el usuario.
 
-## Revisión humana
+## Excel
 
-Cada fragmento señalado permite al coordinador elegir:
+La exportación genera un libro SpreadsheetML compatible con Microsoft Excel con hojas separadas:
 
-- **Sin revisar**
-- **Revisar**
-- **Solicitar explicación**
-- **Descartar alerta**
+- `Resumen`
+- `Similitud interna`
+- `Fuentes externas`
+- `Citas y APA`
+- `Referencias`
+- `Indicadores IA`
 
-También puede registrar una observación interna. Las decisiones quedan persistidas en Supabase.
+No se añade una dependencia pesada de terceros para esta fase: el archivo se produce desde SIAI y se guarda mediante el proceso principal de Electron.
 
-Cuando una alerta se marca como **Descartar alerta**, el estudiante no la recibe en el informe liberado. Esto permite corregir falsos positivos antes de compartir el resultado.
+## Integridad del informe
+
+Cada instantánea almacena:
+
+```text
+report_number
+report_schema_version
+final_status
+final_observation
+snapshot
+snapshot_sha256
+created_at
+released_to_student
+```
+
+Antes de permitir una descarga, el renderer vuelve a canonicalizar la instantánea y recalcula SHA-256. Si la huella no coincide, SIAI bloquea la exportación.
 
 ## Privacidad
 
-La Fase 7 no necesita enviar el documento a un proveedor externo de “detección de IA”. El análisis estilométrico se ejecuta dentro de la Edge Function `ai-writing-indicators` con los textos ya almacenados en Supabase.
+El informe final destinado al estudiante no expone el nombre del propietario de un trabajo institucional coincidente. Las fuentes internas aparecen como **Repositorio institucional ITSQMET**.
+
+Las alertas de IA marcadas por el coordinador como **Descartar alerta** tampoco forman parte de la instantánea final.
 
 El estudiante:
 
-- solo puede leer sus propios documentos;
-- no puede ejecutar el análisis de IA;
-- no puede cambiar índices o decisiones del coordinador;
-- solo puede ver el informe cuando el coordinador lo libera;
-- no ve alertas descartadas por revisión humana.
+- solo accede a sus propios documentos;
+- no crea informes finales;
+- no cambia el resultado final;
+- no modifica la instantánea;
+- solo descarga un informe cuando el coordinador lo libera.
+
+## Estados del informe
+
+El coordinador puede guardar cada instantánea con uno de estos estados:
+
+- Pendiente de decisión
+- Aprobado
+- Con observaciones
+- Requiere corrección
+- No aprobado
+
+El estado forma parte de la instantánea histórica. Para cambiarlo posteriormente se genera un informe nuevo.
 
 ## Preparar Supabase
 
@@ -113,6 +149,7 @@ En un proyecto nuevo ejecuta, en este orden:
 5. `supabase/phase5.sql`
 6. `supabase/phase6.sql`
 7. `supabase/phase7.sql`
+8. `supabase/phase8.sql`
 
 Después convierte únicamente la cuenta administrativa en coordinador:
 
@@ -124,8 +161,6 @@ where email = 'TU_CORREO';
 
 ## Edge Functions
 
-Para las fases de búsqueda externa y bibliografía, configura los secretos necesarios según `supabase/functions/.env.example`.
-
 Despliega las tres funciones actuales:
 
 ```powershell
@@ -134,7 +169,7 @@ supabase functions deploy citation-integrity
 supabase functions deploy ai-writing-indicators
 ```
 
-`ai-writing-indicators` no requiere una clave privada de un proveedor de detección de IA.
+La Fase 8 no agrega una Edge Function nueva: la consolidación del snapshot utiliza datos protegidos por RLS y la exportación PDF/Excel se realiza en Electron.
 
 ## Flujo actual
 
@@ -145,7 +180,7 @@ Extracción + SHA-256 + versiones
         ↓
 Similitud interna ITSQMET
         ↓
-Informe interactivo + exclusiones
+Exclusiones + recálculo
         ↓
 Búsqueda externa pública
         ↓
@@ -153,9 +188,13 @@ Citas + bibliografía + APA 7
         ↓
 Indicadores de escritura asistida por IA
         ↓
-Revisión humana por fragmento
+Revisión humana
         ↓
-Coordinador libera u oculta cada informe
+Informe final versionado + SHA-256
+        ↓
+PDF / Excel
+        ↓
+Coordinador libera al estudiante
 ```
 
 ## Desarrollo
@@ -200,34 +239,27 @@ src/
     ExternalSimilarityPanel.tsx
     CitationIntegrityPanel.tsx
     AiWritingPanel.tsx
+    IntegrityReportPanel.tsx
   lib/
-    documents.ts
     similarity.ts
     similarityView.ts
     externalSimilarity.ts
     citationIntegrity.ts
     aiWriting.ts
+    integrityReport.ts
   types/
     similarity.ts
     externalSimilarity.ts
     citationIntegrity.ts
     aiWriting.ts
-  phase4.css
-  external.css
-  phase6.css
-  phase7.css
+    integrityReport.ts
+    desktop.d.ts
+  phase8.css
+electron/
+  main.ts
+  preload.ts
 supabase/
-  schema.sql
-  phase2.sql
-  phase3.sql
-  phase4.sql
-  phase5.sql
-  phase6.sql
-  phase7.sql
-  functions/
-    external-similarity/index.ts
-    citation-integrity/index.ts
-    ai-writing-indicators/index.ts
+  phase8.sql
 ```
 
 ## Ruta del proyecto
@@ -239,7 +271,7 @@ supabase/
 - Fase 5: fuentes académicas y web públicas ✅
 - Fase 6: citas + referencias + verificación bibliográfica + APA 7 ✅
 - Fase 7: indicadores de escritura asistida por IA + revisión humana ✅
-- Fase 8: informes PDF/Excel
+- Fase 8: informes finales PDF/Excel + snapshot SHA-256 ✅
 - Fase 9: instalador y actualizaciones
 
 ## Principio del sistema
