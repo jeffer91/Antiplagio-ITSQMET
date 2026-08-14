@@ -37,7 +37,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Panel del coordinador</span>
           <h1>Centro de integridad académica</h1>
-          <p>La Fase 3 compara cada versión contra el corpus institucional, agrupa las coincidencias por trabajo y conserva la evidencia que explica cada porcentaje.</p>
+          <p>La Fase 4 convierte la evidencia de similitud en un informe interactivo: documento resaltado, fuentes numeradas, exclusiones controladas y porcentaje ajustado sin borrar el resultado original.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Nuevo análisis</button>
       </header>
@@ -52,12 +52,12 @@ export function CoordinatorDashboard(): React.JSX.Element {
       </section>
 
       <section className="phase-banner">
-        <div><span className="eyebrow dark">Fase 3</span><h2>Similitud institucional operativa</h2><p>Abre cualquier trabajo y ejecuta el análisis sobre una versión lista. SIAI excluye las otras versiones del mismo trabajo, compara contra el resto del repositorio y evita sumar dos veces un mismo fragmento.</p></div>
-        <div className="phase-steps"><span>✓ Normalización</span><span>✓ Shingles de 5 palabras</span><span>✓ Fuentes agrupadas</span><span>✓ Evidencia guardada</span></div>
+        <div><span className="eyebrow dark">Fase 4</span><h2>Informe interactivo operativa</h2><p>Abre una versión analizada y entra en “Abrir informe interactivo”. Puedes excluir bibliografía, citas textuales, fuentes completas o coincidencias pequeñas; SIAI recalcula el índice y conserva por separado el porcentaje original.</p></div>
+        <div className="phase-steps"><span>✓ Texto resaltado</span><span>✓ Fuentes numeradas</span><span>✓ Exclusiones</span><span>✓ Recalculo guardado</span></div>
       </section>
 
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando documentos…</div> : documents.length === 0 ? (
-        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Necesitas al menos dos trabajos diferentes con texto extraído para comprobar la similitud institucional.</p></section>
+        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Necesitas al menos dos trabajos diferentes con texto extraído para generar y revisar un informe de similitud institucional.</p></section>
       ) : <DocumentList documents={documents} showOwner onView={setDetailsTarget} />}
 
       <UploadDocumentModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
