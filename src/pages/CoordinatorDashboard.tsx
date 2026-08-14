@@ -37,7 +37,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Panel del coordinador</span>
           <h1>Centro de integridad académica</h1>
-          <p>La Fase 5 añade búsqueda externa verificable. SIAI localiza candidatos en índices académicos y web pública, pero solo suma al porcentaje aquello que pudo contrastar contra texto realmente accesible.</p>
+          <p>La Fase 6 añade revisión bibliográfica: SIAI vincula citas autor-fecha con la bibliografía, verifica referencias públicas y separa los problemas APA de las referencias que requieren una comprobación de existencia.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Nuevo análisis</button>
       </header>
@@ -47,17 +47,17 @@ export function CoordinatorDashboard(): React.JSX.Element {
       <section className="metric-grid">
         <article className="metric-card"><span>Trabajos</span><strong>{documents.length}</strong><small>Documentos registrados</small></article>
         <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial institucional</small></article>
-        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Disponibles para análisis interno y externo</small></article>
+        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Disponibles para similitud y bibliografía</small></article>
         <article className="metric-card"><span>Requieren OCR</span><strong>{metrics.ocr}</strong><small>{metrics.owners} usuarios con entregas</small></article>
       </section>
 
       <section className="phase-banner">
-        <div><span className="eyebrow dark">Fase 5</span><h2>Fuentes públicas y académicas</h2><p>Abre una versión y usa “Buscar fuentes externas”. El motor consulta OpenAlex, CORE, Semantic Scholar, Crossref y, si se configura una clave, búsqueda web mediante Brave. Los resultados sin texto verificable se conservan como candidatos y nunca inflan el porcentaje.</p></div>
-        <div className="phase-steps"><span>✓ OpenAlex</span><span>✓ CORE / S2</span><span>✓ Crossref</span><span>✓ Web opcional</span></div>
+        <div><span className="eyebrow dark">Fase 6</span><h2>Citas, referencias y APA 7</h2><p>Abre una versión y usa “Revisar citas y bibliografía”. SIAI detecta el listado de referencias, enlaza las citas del cuerpo, consulta Crossref/OpenAlex y señala DOI, duplicados, orden alfabético y campos ausentes. Una referencia no localizada queda marcada para revisión manual, no como una acusación automática.</p></div>
+        <div className="phase-steps"><span>✓ Citas ↔ referencias</span><span>✓ Crossref</span><span>✓ OpenAlex</span><span>✓ APA 7</span></div>
       </section>
 
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando documentos…</div> : documents.length === 0 ? (
-        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Sube al menos un trabajo con texto extraíble para probar la búsqueda externa. Para similitud institucional hacen falta al menos dos trabajos distintos.</p></section>
+        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Sube un trabajo con texto extraíble para revisar su similitud, citas y bibliografía.</p></section>
       ) : <DocumentList documents={documents} showOwner onView={setDetailsTarget} />}
 
       <UploadDocumentModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
