@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
+import { CitationIntegrityPanel } from './CitationIntegrityPanel';
 import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
 import { SimilarityPanel } from './SimilarityPanel';
 
@@ -50,7 +51,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
     }
   };
 
-  const canRunSimilarity = profile?.role === 'coordinator';
+  const canRunAnalysis = profile?.role === 'coordinator';
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -79,8 +80,9 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                 <code title={version.sha256}>SHA-256 {version.sha256.slice(0, 12)}…</code>
                 <button className="secondary-button compact-button" type="button" onClick={() => void openOriginal(version)}>Abrir original</button>
               </div>
-              <SimilarityPanel version={version} canRun={canRunSimilarity} />
-              <ExternalSimilarityPanel version={version} canRun={canRunSimilarity} />
+              <SimilarityPanel version={version} canRun={canRunAnalysis} />
+              <ExternalSimilarityPanel version={version} canRun={canRunAnalysis} />
+              <CitationIntegrityPanel version={version} canRun={canRunAnalysis} />
             </article>
           ))}
         </div>
