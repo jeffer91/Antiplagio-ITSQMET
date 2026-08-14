@@ -6,6 +6,7 @@ import './similarity.css';
 import './phase4.css';
 import './external.css';
 import './phase6.css';
+import './phase7.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
