@@ -33,7 +33,7 @@ export function StudentDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Portal del estudiante</span>
           <h1>Mis entregas académicas</h1>
-          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y nunca reemplaza silenciosamente la anterior.</p>
+          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y los informes de similitud aparecen únicamente cuando el coordinador los libera.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={openNew}>+ Nueva entrega</button>
       </header>
@@ -42,16 +42,16 @@ export function StudentDashboard(): React.JSX.Element {
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando tus documentos…</div> : documents.length === 0 ? (
         <section className="student-empty-state">
           <div className="document-icon">A</div>
-          <span className="status-badge">Fase 2 activa</span>
+          <span className="status-badge">SIAI activo</span>
           <h2>Aún no tienes entregas</h2>
-          <p>Tu primer archivo quedará almacenado de forma privada, con una huella SHA-256 y extracción inicial del texto para preparar el análisis de similitud.</p>
+          <p>Tu primer archivo quedará almacenado de forma privada, con huella SHA-256, historial de versiones y texto preparado para el análisis institucional.</p>
           <button className="primary-button compact" type="button" onClick={openNew}>Subir primer documento</button>
         </section>
       ) : <DocumentList documents={documents} onView={setDetailsTarget} onNewVersion={openVersion} />}
 
       <section className="privacy-card">
-        <strong>Historial protegido</strong>
-        <p>Solo puedes consultar tus propios documentos. No puedes editar el número de versión, el estado de extracción ni los archivos de otros usuarios.</p>
+        <strong>Informes controlados</strong>
+        <p>Puedes consultar únicamente tus documentos y los análisis que el coordinador haya liberado. Los filtros y exclusiones del porcentaje final son de solo lectura para tu cuenta.</p>
       </section>
 
       <UploadDocumentModal open={uploadOpen} document={versionTarget} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
