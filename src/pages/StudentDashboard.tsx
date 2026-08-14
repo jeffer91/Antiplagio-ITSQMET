@@ -33,7 +33,7 @@ export function StudentDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Portal del estudiante</span>
           <h1>Mis entregas académicas</h1>
-          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y los informes de similitud, bibliografía o indicadores de escritura asistida aparecen únicamente cuando el coordinador los libera.</p>
+          <p>Sube tu artículo en PDF o DOCX. Cada corrección queda registrada como una nueva versión y podrás consultar o descargar el informe final en PDF y Excel únicamente cuando el coordinador lo libere.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={openNew}>+ Nueva entrega</button>
       </header>
@@ -50,8 +50,8 @@ export function StudentDashboard(): React.JSX.Element {
       ) : <DocumentList documents={documents} onView={setDetailsTarget} onNewVersion={openVersion} />}
 
       <section className="privacy-card">
-        <strong>Informes controlados</strong>
-        <p>Puedes consultar únicamente tus documentos y los informes que el coordinador haya liberado. Los indicadores de IA se presentan como señales para revisión, no como una acusación automática, y las alertas descartadas por el coordinador no se muestran en tu informe.</p>
+        <strong>Informes controlados y verificables</strong>
+        <p>Puedes consultar únicamente tus documentos y los informes liberados por el coordinador. El informe final conserva una huella SHA-256 para comprobar que la instantánea descargada corresponde a la evidencia almacenada por SIAI.</p>
       </section>
 
       <UploadDocumentModal open={uploadOpen} document={versionTarget} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
