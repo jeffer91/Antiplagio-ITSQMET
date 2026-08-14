@@ -37,7 +37,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Panel del coordinador</span>
           <h1>Centro de integridad académica</h1>
-          <p>La Fase 2 ya recibe PDF y DOCX, conserva versiones, calcula huellas SHA-256 y extrae el texto que alimentará el motor de similitud institucional.</p>
+          <p>La Fase 3 compara cada versión contra el corpus institucional, agrupa las coincidencias por trabajo y conserva la evidencia que explica cada porcentaje.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Nuevo análisis</button>
       </header>
@@ -46,18 +46,18 @@ export function CoordinatorDashboard(): React.JSX.Element {
 
       <section className="metric-grid">
         <article className="metric-card"><span>Trabajos</span><strong>{documents.length}</strong><small>Documentos registrados</small></article>
-        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial conservado</small></article>
-        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Texto extraído</small></article>
+        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial disponible para comparar</small></article>
+        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Texto disponible para similitud</small></article>
         <article className="metric-card"><span>Requieren OCR</span><strong>{metrics.ocr}</strong><small>{metrics.owners} usuarios con entregas</small></article>
       </section>
 
       <section className="phase-banner">
-        <div><span className="eyebrow dark">Fase 2</span><h2>Ingesta documental operativa</h2><p>El porcentaje de similitud todavía no se calcula: esa lógica corresponde a la Fase 3. Aquí estamos garantizando que el corpus de entrada sea trazable y reproducible.</p></div>
-        <div className="phase-steps"><span>✓ PDF/DOCX</span><span>✓ Storage privado</span><span>✓ Versiones</span><span>✓ Extracción</span></div>
+        <div><span className="eyebrow dark">Fase 3</span><h2>Similitud institucional operativa</h2><p>Abre cualquier trabajo y ejecuta el análisis sobre una versión lista. SIAI excluye las otras versiones del mismo trabajo, compara contra el resto del repositorio y evita sumar dos veces un mismo fragmento.</p></div>
+        <div className="phase-steps"><span>✓ Normalización</span><span>✓ Shingles de 5 palabras</span><span>✓ Fuentes agrupadas</span><span>✓ Evidencia guardada</span></div>
       </section>
 
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando documentos…</div> : documents.length === 0 ? (
-        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Cuando un estudiante cargue su trabajo aparecerá aquí. También puedes cargar un documento propio para probar la ingesta.</p></section>
+        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Necesitas al menos dos trabajos diferentes con texto extraído para comprobar la similitud institucional.</p></section>
       ) : <DocumentList documents={documents} showOwner onView={setDetailsTarget} />}
 
       <UploadDocumentModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={refresh} />
