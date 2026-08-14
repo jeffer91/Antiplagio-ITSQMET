@@ -5,6 +5,7 @@ import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../typ
 import { AiWritingPanel } from './AiWritingPanel';
 import { CitationIntegrityPanel } from './CitationIntegrityPanel';
 import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
+import { IntegrityReportPanel } from './IntegrityReportPanel';
 import { SimilarityPanel } from './SimilarityPanel';
 
 interface Props {
@@ -85,6 +86,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
               <ExternalSimilarityPanel version={version} canRun={canRunAnalysis} />
               <CitationIntegrityPanel version={version} canRun={canRunAnalysis} />
               <AiWritingPanel version={version} canRun={canRunAnalysis} />
+              <IntegrityReportPanel document={document} version={version} canRun={canRunAnalysis} />
             </article>
           ))}
         </div>
