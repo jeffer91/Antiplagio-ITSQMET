@@ -30,4 +30,4 @@ jobs:
           deno-version: v2.x
           cache: true
       - name: Check Edge Functions
-        run: deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts
+        run: deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts supabase/functions/ai-writing-indicators/index.ts
