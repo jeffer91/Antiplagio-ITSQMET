@@ -2,12 +2,15 @@ import { supabase } from './supabase';
 import type { DocumentVersion } from '../types/documents';
 import type {
   AnalysisProgress,
+  CoveredWordRange,
+  SimilarityAdjustment,
   SimilarityAnalysisResult,
+  SimilarityFilterSettings,
   SimilarityMatch,
   SimilaritySourceResult,
 } from '../types/similarity';
 
-export const INTERNAL_SIMILARITY_ALGORITHM = 'siai-internal-shingle-v1';
+export const INTERNAL_SIMILARITY_ALGORITHM = 'siai-internal-shingle-v2';
 
 const SHINGLE_SIZE = 5;
 const MIN_MATCH_WORDS = 10;
@@ -106,6 +109,26 @@ function chooseSourcePosition(candidates: number[], expected: number, previous: 
   return selected !== null && bestDistance <= MAX_SOURCE_DRIFT ? selected : null;
 }
 
+function compressWords(words: Iterable<number>): CoveredWordRange[] {
+  const sorted = [...new Set(words)].sort((a, b) => a - b);
+  if (sorted.length === 0) return [];
+  const ranges: CoveredWordRange[] = [];
+  let start = sorted[0];
+  let previous = sorted[0];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const current = sorted[index];
+    if (current === previous + 1) {
+      previous = current;
+      continue;
+    }
+    ranges.push([start, previous + 1]);
+    start = current;
+    previous = current;
+  }
+  ranges.push([start, previous + 1]);
+  return ranges;
+}
+
 function comparePrepared(target: PreparedText, source: PreparedText): { matches: SimilarityMatch[]; coveredTargetWords: number[] } {
   if (target.tokens.length < MIN_MATCH_WORDS || source.tokens.length < MIN_MATCH_WORDS) {
     return { matches: [], coveredTargetWords: [] };
@@ -131,9 +154,11 @@ function comparePrepared(target: PreparedText, source: PreparedText): { matches:
     const density = run.length / possibleShingles;
 
     if (spanWords >= MIN_MATCH_WORDS && density >= 0.45) {
+      const localCovered = new Set<number>();
       for (const point of run) {
         for (let offset = 0; offset < SHINGLE_SIZE; offset += 1) {
           covered.add(point.target + offset);
+          localCovered.add(point.target + offset);
         }
       }
 
@@ -146,6 +171,7 @@ function comparePrepared(target: PreparedText, source: PreparedText): { matches:
         target_excerpt: excerpt(target, startTarget, endTarget),
         source_excerpt: excerpt(source, startSource, endSource),
         similarity_score: Math.min(100, Math.round(density * 10000) / 100),
+        target_covered_ranges: compressWords(localCovered),
       });
     }
     run = [];
@@ -187,8 +213,8 @@ function comparePrepared(target: PreparedText, source: PreparedText): { matches:
 
   const acceptedCovered = new Set<number>();
   for (const match of sortedMatches) {
-    for (let index = match.target_start_word; index < match.target_end_word; index += 1) {
-      if (covered.has(index)) acceptedCovered.add(index);
+    for (const [start, end] of match.target_covered_ranges ?? []) {
+      for (let index = start; index < end; index += 1) acceptedCovered.add(index);
     }
   }
 
@@ -283,7 +309,7 @@ export async function runInternalSimilarityAnalysis(
 
   onProgress?.({ stage: 'saving', current: selected.length, total: selected.length, message: 'Guardando evidencia…' });
   const client = requireClient();
-  const { data, error } = await client.rpc('save_internal_similarity_analysis', {
+  const { data, error } = await client.rpc('save_internal_similarity_analysis_v2', {
     p_target_version_id: target.id,
     p_algorithm_version: INTERNAL_SIMILARITY_ALGORITHM,
     p_similarity_percent: similarityPercent,
@@ -339,7 +365,7 @@ export async function loadSimilarityAnalysis(analysisId: string): Promise<Simila
   if (sourceIds.length > 0) {
     const { data: matches, error: matchesError } = await client
       .from('similarity_matches')
-      .select('id,source_id,match_type,target_start_word,target_end_word,source_start_word,source_end_word,target_excerpt,source_excerpt,similarity_score')
+      .select('id,source_id,match_type,target_start_word,target_end_word,source_start_word,source_end_word,target_excerpt,source_excerpt,similarity_score,target_covered_ranges')
       .in('source_id', sourceIds)
       .order('target_start_word', { ascending: true });
     if (matchesError) throw matchesError;
@@ -357,13 +383,57 @@ export async function loadSimilarityAnalysis(analysisId: string): Promise<Simila
     ...source,
     owner_name: ownerNames.get(source.source_owner_id) ?? null,
     similarity_percent: Number(source.similarity_percent),
-    matches: matchRows.map((match) => ({ ...match, similarity_score: Number(match.similarity_score) })).filter((match) => match.source_id === source.id),
+    matches: matchRows
+      .map((match) => ({ ...match, similarity_score: Number(match.similarity_score) }))
+      .filter((match) => match.source_id === source.id),
   }));
 
+  const { data: adjustmentRow, error: adjustmentError } = await client
+    .from('similarity_adjustments')
+    .select('analysis_id,exclude_bibliography,exclude_quoted_text,min_match_words,excluded_source_ids,adjusted_similarity_percent,adjusted_matched_words,saved_by,updated_at')
+    .eq('analysis_id', analysisId)
+    .maybeSingle();
+  if (adjustmentError) throw adjustmentError;
+
+  const adjustment = adjustmentRow
+    ? ({
+        ...adjustmentRow,
+        adjusted_similarity_percent: Number(adjustmentRow.adjusted_similarity_percent),
+        excluded_source_ids: (adjustmentRow.excluded_source_ids ?? []) as string[],
+      } as SimilarityAdjustment)
+    : null;
+
   return {
-    ...(analysis as Omit<SimilarityAnalysisResult, 'sources' | 'similarity_percent'>),
+    ...(analysis as Omit<SimilarityAnalysisResult, 'sources' | 'similarity_percent' | 'adjustment'>),
     similarity_percent: Number(analysis.similarity_percent),
     sources: enrichedSources,
+    adjustment,
+  };
+}
+
+export async function saveSimilarityAdjustment(
+  analysisId: string,
+  settings: SimilarityFilterSettings,
+  adjustedSimilarityPercent: number,
+  adjustedMatchedWords: number,
+): Promise<SimilarityAdjustment> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('save_similarity_adjustment', {
+    p_analysis_id: analysisId,
+    p_exclude_bibliography: settings.exclude_bibliography,
+    p_exclude_quoted_text: settings.exclude_quoted_text,
+    p_min_match_words: settings.min_match_words,
+    p_excluded_source_ids: settings.excluded_source_ids,
+    p_adjusted_similarity_percent: adjustedSimilarityPercent,
+    p_adjusted_matched_words: adjustedMatchedWords,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Supabase no devolvió los ajustes guardados.');
+  return {
+    ...(row as SimilarityAdjustment),
+    adjusted_similarity_percent: Number(row.adjusted_similarity_percent),
+    excluded_source_ids: (row.excluded_source_ids ?? []) as string[],
   };
 }
 
