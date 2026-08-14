@@ -1,0 +1,46 @@
+.similarity-panel { margin-top: 18px; padding: 20px; border: 1px solid #dfe8e4; border-radius: 14px; background: #f8fbfa; }
+.similarity-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.similarity-heading h3 { margin: 2px 0 0; font-size: 18px; letter-spacing: -.02em; }
+.similarity-score { min-width: 92px; padding: 11px 13px; border: 1px solid #cce9dc; border-radius: 12px; background: #eaf8f2; text-align: center; }
+.similarity-score strong, .similarity-score span { display: block; }
+.similarity-score strong { font-size: 24px; line-height: 1; }
+.similarity-score span { margin-top: 4px; color: #65756f; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.similarity-score.medium { border-color: #efd9aa; background: #fff7e6; }
+.similarity-score.high { border-color: #efc4c4; background: #fff0f0; }
+.similarity-empty { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 15px; border-radius: 10px; background: white; }
+.similarity-empty p { margin: 0; color: #6f7d89; line-height: 1.5; }
+.analysis-progress { margin-top: 14px; padding: 13px 14px; border: 1px solid #dce6e2; border-radius: 10px; background: white; }
+.analysis-progress > div:first-child { display: flex; justify-content: space-between; gap: 12px; color: #53645e; font-size: 12px; }
+.progress-track { height: 7px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: #e8eeec; }
+.progress-track span { display: block; height: 100%; border-radius: inherit; background: #1c8b64; transition: width .18s ease; }
+.similarity-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.similarity-stats span { padding: 11px; border-radius: 10px; color: #718079; background: white; font-size: 11px; }
+.similarity-stats strong { display: block; margin-bottom: 3px; color: #20332c; font-size: 16px; }
+.analysis-meta { margin-top: 10px; color: #89968f; font-size: 10px; }
+.no-sources { margin-top: 14px; padding: 14px; border: 1px dashed #cddbd5; border-radius: 10px; color: #65756f; background: white; font-size: 12px; }
+.source-list { display: grid; gap: 10px; margin-top: 14px; }
+.source-card { overflow: hidden; border: 1px solid #e0e7e4; border-radius: 12px; background: white; }
+.source-card-heading { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 13px 14px; }
+.source-number { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: white; background: #287c62; font-size: 11px; font-weight: 900; }
+.source-card-heading strong, .source-card-heading small { display: block; }
+.source-card-heading strong { color: #263b34; font-size: 12px; }
+.source-card-heading small { margin-top: 3px; color: #89958f; font-size: 10px; }
+.source-card-heading > b { color: #1e7357; font-size: 16px; }
+.match-stack { display: grid; gap: 1px; border-top: 1px solid #edf1ef; background: #edf1ef; }
+.match-pair { padding: 12px 14px; background: #fbfcfc; }
+.match-pair p { margin: 7px 0 0; color: #5f6d68; font-size: 11px; line-height: 1.55; }
+.match-pair p b { color: #34483f; }
+.match-kind { display: inline-flex; padding: 4px 7px; border-radius: 999px; background: #ebf7f2; color: #257458; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.match-kind.near { background: #fff4da; color: #8b620d; }
+.similarity-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 13px; border-top: 1px solid #e2e9e6; }
+.release-state { margin-left: auto; padding: 6px 8px; border-radius: 999px; color: #7b6a42; background: #fff5dc; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.release-state.released { color: #246f55; background: #e9f7f1; }
+
+@media (max-width: 760px) {
+  .similarity-heading, .similarity-empty { align-items: stretch; flex-direction: column; }
+  .similarity-score { width: fit-content; }
+  .similarity-stats { grid-template-columns: 1fr; }
+  .source-card-heading { grid-template-columns: 30px minmax(0, 1fr); }
+  .source-card-heading > b { grid-column: 2; }
+  .release-state { margin-left: 0; }
+}
