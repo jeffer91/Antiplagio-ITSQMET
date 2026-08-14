@@ -4,16 +4,20 @@ Sistema de Integridad Académica Institucional. Aplicación de escritorio orient
 
 ## Estado
 
-**Fase 1 — Base de la aplicación**
+**Fase 2 — Ingesta documental**
 
 - Electron con aislamiento del renderer (`contextIsolation`, `sandbox`, sin `nodeIntegration`).
 - React + TypeScript + Vite.
-- Supabase Auth con correo y contraseña.
-- Dos roles: `student` y `coordinator`.
-- Toda cuenta creada desde la aplicación nace como `student`.
-- El rol de coordinador se asigna únicamente desde la base de datos.
-- Row Level Security activa para perfiles.
-- Interfaz independiente para estudiante y coordinador.
+- Supabase Auth con roles `student` y `coordinator`.
+- Carga de archivos PDF y DOCX de hasta 25 MB.
+- Storage privado de Supabase con políticas por propietario.
+- Historial de versiones sin reemplazar entregas anteriores.
+- Huella SHA-256 por archivo y rechazo de duplicados dentro del mismo trabajo.
+- Extracción de texto de PDF mediante PDF.js.
+- Extracción de texto de DOCX mediante Mammoth.
+- Detección de PDF con poco texto seleccionable y estado `needs_ocr`.
+- Vista del coordinador de todas las entregas y del estudiante únicamente de las propias.
+- Apertura temporal del original mediante URL firmada.
 - CI en GitHub para validar TypeScript y compilación.
 
 ## Requisitos
@@ -41,10 +45,12 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REEMPLAZAR
 
 ## Preparar Supabase
 
-1. Abre el SQL Editor de tu proyecto Supabase.
-2. Ejecuta todo el archivo `supabase/schema.sql`.
+En un proyecto nuevo:
+
+1. Ejecuta `supabase/schema.sql` en SQL Editor.
+2. Ejecuta `supabase/phase2.sql`.
 3. Inicia SIAI y crea tu cuenta.
-4. En SQL Editor cambia únicamente tu cuenta a coordinador:
+4. Convierte únicamente tu cuenta en coordinador:
 
 ```sql
 update public.profiles
@@ -54,13 +60,35 @@ where email = 'TU_CORREO';
 
 Las demás cuentas permanecen como `student`.
 
+### Seguridad de documentos
+
+El bucket `academic-documents` es privado. El estudiante puede cargar y abrir archivos únicamente dentro de su carpeta (`auth.uid()`), mientras que el coordinador puede consultar los originales de todos los trabajos. La numeración de versiones se calcula en PostgreSQL mediante `register_document_version`; el cliente no tiene permisos directos de INSERT/UPDATE sobre las tablas documentales.
+
+## Flujo de la Fase 2
+
+```text
+Seleccionar PDF/DOCX
+        ↓
+Validar formato y tamaño
+        ↓
+Extraer texto localmente
+        ↓
+Calcular SHA-256
+        ↓
+Subir original a Storage privado
+        ↓
+Registrar versión en PostgreSQL
+        ↓
+Mostrar historial y vista previa del texto
+```
+
+Si el registro SQL falla después de la subida, la aplicación elimina el objeto recién subido para evitar archivos huérfanos.
+
 ## Desarrollo
 
 ```powershell
 npm run dev
 ```
-
-Se ejecutan en paralelo Vite, el compilador del proceso Electron y Electron.
 
 ## Validar el proyecto
 
@@ -69,29 +97,29 @@ npm run typecheck
 npm run build
 ```
 
-## Seguridad de la Fase 1
-
-El permiso no se decide ocultando pantallas. El renderer recibe una clave publicable de Supabase y las políticas RLS determinan qué filas puede leer cada usuario. El cliente no dispone de políticas para insertar, actualizar o eliminar perfiles; por ello un estudiante no puede cambiar su propio rol mediante una llamada directa a la API.
-
 ## Estructura
 
 ```text
-electron/                 Proceso principal y preload seguro
+electron/                       Proceso principal y preload seguro
 src/
-  auth/                   Sesión y perfil
-  components/             Componentes compartidos
-  lib/                    Cliente Supabase
-  pages/                  Pantallas por rol
-  types/                  Tipos del dominio
+  auth/                         Sesión y perfil
+  components/                   Carga, listado e historial documental
+  lib/
+    supabase.ts                 Cliente Supabase
+    documentExtractor.ts        Extracción PDF/DOCX
+    documents.ts                Storage, SHA-256 y registro de versiones
+  pages/                        Paneles por rol
+  types/                        Tipos del dominio
 supabase/
-  schema.sql              Esquema, trigger y RLS
-.github/workflows/ci.yml  Validación automática
+  schema.sql                    Fase 1: perfiles y roles
+  phase2.sql                    Documentos, versiones, Storage y RLS
+.github/workflows/ci.yml        Validación automática
 ```
 
 ## Ruta del proyecto
 
 - Fase 1: Electron + React + Supabase + roles ✅
-- Fase 2: carga PDF/DOCX + almacenamiento + versiones + extracción
+- Fase 2: carga PDF/DOCX + almacenamiento + versiones + extracción ✅
 - Fase 3: similitud contra corpus institucional
 - Fase 4: visor interactivo de coincidencias
 - Fase 5: fuentes académicas y web públicas

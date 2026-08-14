@@ -1,6 +1,6 @@
 {
   "name": "antiplagio-itsqmet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "SIAI - Sistema de Integridad Académica Institucional del ITSQMET",
   "main": "dist-electron/main.js",
@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.9",
+    "mammoth": "1.12.0",
+    "pdfjs-dist": "6.2.108",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
