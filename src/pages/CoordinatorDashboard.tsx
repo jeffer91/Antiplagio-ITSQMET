@@ -37,7 +37,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">Panel del coordinador</span>
           <h1>Centro de integridad académica</h1>
-          <p>La Fase 4 convierte la evidencia de similitud en un informe interactivo: documento resaltado, fuentes numeradas, exclusiones controladas y porcentaje ajustado sin borrar el resultado original.</p>
+          <p>La Fase 5 añade búsqueda externa verificable. SIAI localiza candidatos en índices académicos y web pública, pero solo suma al porcentaje aquello que pudo contrastar contra texto realmente accesible.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Nuevo análisis</button>
       </header>
@@ -46,18 +46,18 @@ export function CoordinatorDashboard(): React.JSX.Element {
 
       <section className="metric-grid">
         <article className="metric-card"><span>Trabajos</span><strong>{documents.length}</strong><small>Documentos registrados</small></article>
-        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial disponible para comparar</small></article>
-        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Texto disponible para similitud</small></article>
+        <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Historial institucional</small></article>
+        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>Disponibles para análisis interno y externo</small></article>
         <article className="metric-card"><span>Requieren OCR</span><strong>{metrics.ocr}</strong><small>{metrics.owners} usuarios con entregas</small></article>
       </section>
 
       <section className="phase-banner">
-        <div><span className="eyebrow dark">Fase 4</span><h2>Informe interactivo operativa</h2><p>Abre una versión analizada y entra en “Abrir informe interactivo”. Puedes excluir bibliografía, citas textuales, fuentes completas o coincidencias pequeñas; SIAI recalcula el índice y conserva por separado el porcentaje original.</p></div>
-        <div className="phase-steps"><span>✓ Texto resaltado</span><span>✓ Fuentes numeradas</span><span>✓ Exclusiones</span><span>✓ Recalculo guardado</span></div>
+        <div><span className="eyebrow dark">Fase 5</span><h2>Fuentes públicas y académicas</h2><p>Abre una versión y usa “Buscar fuentes externas”. El motor consulta OpenAlex, CORE, Semantic Scholar, Crossref y, si se configura una clave, búsqueda web mediante Brave. Los resultados sin texto verificable se conservan como candidatos y nunca inflan el porcentaje.</p></div>
+        <div className="phase-steps"><span>✓ OpenAlex</span><span>✓ CORE / S2</span><span>✓ Crossref</span><span>✓ Web opcional</span></div>
       </section>
 
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando documentos…</div> : documents.length === 0 ? (
-        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Necesitas al menos dos trabajos diferentes con texto extraído para generar y revisar un informe de similitud institucional.</p></section>
+        <section className="student-empty-state compact-empty"><div className="document-icon">A</div><h2>Sin documentos todavía</h2><p>Sube al menos un trabajo con texto extraíble para probar la búsqueda externa. Para similitud institucional hacen falta al menos dos trabajos distintos.</p></section>
       ) : <DocumentList documents={documents} showOwner onView={setDetailsTarget} />}
 
       <UploadDocumentModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={refresh} />

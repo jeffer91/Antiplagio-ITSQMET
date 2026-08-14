@@ -4,6 +4,7 @@ import App from './App';
 import './styles.css';
 import './similarity.css';
 import './phase4.css';
+import './external.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -24,3 +24,10 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Typecheck and build
         run: npm run build
+      - name: Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+      - name: Check Edge Function
+        run: deno check supabase/functions/external-similarity/index.ts

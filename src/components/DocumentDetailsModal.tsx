@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
+import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
 import { SimilarityPanel } from './SimilarityPanel';
 
 interface Props {
@@ -79,6 +80,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                 <button className="secondary-button compact-button" type="button" onClick={() => void openOriginal(version)}>Abrir original</button>
               </div>
               <SimilarityPanel version={version} canRun={canRunSimilarity} />
+              <ExternalSimilarityPanel version={version} canRun={canRunSimilarity} />
             </article>
           ))}
         </div>
