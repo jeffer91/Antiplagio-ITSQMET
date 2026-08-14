@@ -1,24 +1,35 @@
 # SIAI — Antiplagio ITSQMET
 
-Sistema de Integridad Académica Institucional. Aplicación de escritorio orientada a entregas académicas, similitud, trazabilidad de versiones, revisión bibliográfica e indicadores de uso probable de IA.
+Sistema de Integridad Académica Institucional. Aplicación Electron orientada a entregas académicas, similitud, trazabilidad de versiones, revisión bibliográfica e indicadores de uso probable de IA.
 
 ## Estado
 
-**Fase 2 — Ingesta documental**
+**Fase 3 — Similitud institucional**
 
-- Electron con aislamiento del renderer (`contextIsolation`, `sandbox`, sin `nodeIntegration`).
-- React + TypeScript + Vite.
+- Electron + React + TypeScript + Vite.
 - Supabase Auth con roles `student` y `coordinator`.
-- Carga de archivos PDF y DOCX de hasta 25 MB.
-- Storage privado de Supabase con políticas por propietario.
-- Historial de versiones sin reemplazar entregas anteriores.
-- Huella SHA-256 por archivo y rechazo de duplicados dentro del mismo trabajo.
-- Extracción de texto de PDF mediante PDF.js.
-- Extracción de texto de DOCX mediante Mammoth.
-- Detección de PDF con poco texto seleccionable y estado `needs_ocr`.
-- Vista del coordinador de todas las entregas y del estudiante únicamente de las propias.
-- Apertura temporal del original mediante URL firmada.
+- PDF y DOCX de hasta 25 MB.
+- Storage privado y versiones inmutables.
+- SHA-256 por archivo.
+- Extracción de texto PDF/DOCX.
+- Detección de PDF que requiere OCR.
+- Comparación contra todas las versiones disponibles del corpus institucional.
+- Exclusión automática de versiones anteriores del mismo trabajo revisado.
+- Normalización de texto y shingles de 5 palabras.
+- Detección de coincidencias textuales y modificaciones leves conservando suficiente texto común.
+- Agrupación por trabajo fuente: si una fuente tiene varias versiones, se conserva la versión con mayor evidencia para no inflar el porcentaje.
+- Cálculo de similitud mediante cobertura única de palabras del documento objetivo: un fragmento coincidente con varias fuentes no se suma varias veces.
+- Evidencia por fragmento con extracto del trabajo y extracto de la fuente.
+- Historial de ejecuciones de análisis.
+- El coordinador decide cuándo liberar un resultado al estudiante.
+- RLS para impedir que el estudiante consulte análisis no liberados o documentos ajenos.
 - CI en GitHub para validar TypeScript y compilación.
+
+## Qué detecta la Fase 3
+
+El motor `siai-internal-shingle-v1` está diseñado para la **similitud interna del ITSQMET**. Detecta principalmente copia textual y modificaciones ligeras donde siguen existiendo secuencias comunes de palabras. El umbral mínimo de evidencia es de 10 palabras y las coincidencias se localizan mediante shingles de 5 palabras.
+
+Esta fase **no afirma detectar paráfrasis semántica profunda ni plagio externo en Internet**. Esas capas se incorporan posteriormente para evitar presentar como resuelto algo que necesita otro tipo de modelos y fuentes.
 
 ## Requisitos
 
@@ -41,16 +52,17 @@ VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REEMPLAZAR
 ```
 
-> No colocar jamás una clave `service_role` en `.env` de Electron. Todo valor `VITE_*` termina disponible para el renderer.
+> Nunca coloques una clave `service_role` dentro de Electron. Todo valor `VITE_*` puede terminar disponible para el renderer.
 
 ## Preparar Supabase
 
-En un proyecto nuevo:
+En un proyecto nuevo ejecuta, en este orden:
 
-1. Ejecuta `supabase/schema.sql` en SQL Editor.
-2. Ejecuta `supabase/phase2.sql`.
-3. Inicia SIAI y crea tu cuenta.
-4. Convierte únicamente tu cuenta en coordinador:
+1. `supabase/schema.sql`
+2. `supabase/phase2.sql`
+3. `supabase/phase3.sql`
+
+Después crea tu cuenta y convierte únicamente la cuenta administrativa en coordinador:
 
 ```sql
 update public.profiles
@@ -58,31 +70,39 @@ set role = 'coordinator'
 where email = 'TU_CORREO';
 ```
 
-Las demás cuentas permanecen como `student`.
+Las cuentas creadas normalmente permanecen como `student`.
 
-### Seguridad de documentos
-
-El bucket `academic-documents` es privado. El estudiante puede cargar y abrir archivos únicamente dentro de su carpeta (`auth.uid()`), mientras que el coordinador puede consultar los originales de todos los trabajos. La numeración de versiones se calcula en PostgreSQL mediante `register_document_version`; el cliente no tiene permisos directos de INSERT/UPDATE sobre las tablas documentales.
-
-## Flujo de la Fase 2
+## Flujo actual
 
 ```text
-Seleccionar PDF/DOCX
+Estudiante carga PDF/DOCX
         ↓
-Validar formato y tamaño
+Extracción + SHA-256 + almacenamiento privado
         ↓
-Extraer texto localmente
+Versión V1 / V2 / V3...
         ↓
-Calcular SHA-256
+Coordinador abre una versión
         ↓
-Subir original a Storage privado
+Analizar similitud interna
         ↓
-Registrar versión en PostgreSQL
+Normalizar texto y crear fingerprints de 5 palabras
         ↓
-Mostrar historial y vista previa del texto
+Comparar contra el resto del corpus ITSQMET
+        ↓
+Agrupar fuentes y eliminar doble conteo
+        ↓
+Guardar porcentaje + fuentes + fragmentos coincidentes
+        ↓
+Coordinador puede liberar u ocultar el resultado al estudiante
 ```
 
-Si el registro SQL falla después de la subida, la aplicación elimina el objeto recién subido para evitar archivos huérfanos.
+Las versiones del mismo trabajo objetivo se excluyen de la comparación para evitar que una V2 obtenga un porcentaje artificialmente alto por coincidir con su propia V1.
+
+## Seguridad
+
+El estudiante puede leer únicamente sus documentos y los análisis que el coordinador haya liberado. Las tablas de similitud no aceptan inserciones directas desde el cliente. La persistencia se realiza mediante `save_internal_similarity_analysis`, que valida en PostgreSQL que el usuario sea coordinador.
+
+El nombre del propietario de una fuente institucional solo se resuelve para quien tenga permiso sobre el perfil; de lo contrario la interfaz muestra `Repositorio institucional`.
 
 ## Desarrollo
 
@@ -97,31 +117,30 @@ npm run typecheck
 npm run build
 ```
 
-## Estructura
+## Estructura relevante
 
 ```text
-electron/                       Proceso principal y preload seguro
 src/
-  auth/                         Sesión y perfil
-  components/                   Carga, listado e historial documental
+  components/
+    SimilarityPanel.tsx          Resultado y evidencia institucional
   lib/
-    supabase.ts                 Cliente Supabase
-    documentExtractor.ts        Extracción PDF/DOCX
-    documents.ts                Storage, SHA-256 y registro de versiones
-  pages/                        Paneles por rol
-  types/                        Tipos del dominio
+    documentExtractor.ts         Extracción PDF/DOCX
+    documents.ts                 Storage y versionamiento
+    similarity.ts                Motor de similitud institucional
+  types/
+    similarity.ts                Tipos del análisis
 supabase/
-  schema.sql                    Fase 1: perfiles y roles
-  phase2.sql                    Documentos, versiones, Storage y RLS
-.github/workflows/ci.yml        Validación automática
+  schema.sql                     Fase 1: perfiles y roles
+  phase2.sql                     Documentos, versiones y Storage
+  phase3.sql                     Análisis, fuentes, coincidencias y RLS
 ```
 
 ## Ruta del proyecto
 
 - Fase 1: Electron + React + Supabase + roles ✅
 - Fase 2: carga PDF/DOCX + almacenamiento + versiones + extracción ✅
-- Fase 3: similitud contra corpus institucional
-- Fase 4: visor interactivo de coincidencias
+- Fase 3: similitud contra corpus institucional ✅
+- Fase 4: visor interactivo tipo Turnitin + exclusiones y recálculo
 - Fase 5: fuentes académicas y web públicas
 - Fase 6: citas, bibliografía y APA 7
 - Fase 7: indicadores de escritura asistida por IA
@@ -130,4 +149,4 @@ supabase/
 
 ## Principio del sistema
 
-SIAI presentará evidencia de similitud e indicadores de posible uso de IA. La decisión académica final corresponde a una persona responsable de la revisión.
+SIAI presenta evidencia de similitud e indicadores para revisión académica. La decisión final corresponde a una persona responsable de la evaluación.
