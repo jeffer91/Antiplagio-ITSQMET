@@ -137,7 +137,7 @@ function sanitizeRanges(match: SimilarityMatch): CoveredWordRange[] {
   if (Array.isArray(supplied) && supplied.length > 0) {
     return supplied
       .filter((range): range is CoveredWordRange => Array.isArray(range) && range.length === 2)
-      .map(([start, end]) => [Math.max(0, Math.floor(start)), Math.max(0, Math.floor(end))])
+      .map(([start, end]): CoveredWordRange => [Math.max(0, Math.floor(start)), Math.max(0, Math.floor(end))])
       .filter(([start, end]) => end > start);
   }
   return [[match.target_start_word, match.target_end_word]];
