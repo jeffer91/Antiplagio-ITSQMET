@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { loadNotifications } from '../lib/plagGuard';
+import { loadNotifications, resolveNotification } from '../lib/plagGuard';
 import type { AppRole } from '../types/auth';
 import type { AppNotification } from '../types/plagGuard';
 
@@ -14,10 +14,15 @@ const roleLabels: Record<AppRole, string> = {
   admin: 'Administrador',
 };
 
+function canAcknowledge(notification: AppNotification): boolean {
+  return notification.kind !== 'supplementary_required';
+}
+
 export function AppShell({ role, children }: AppShellProps): React.JSX.Element {
   const { profile, signOut } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState<string | null>(null);
 
   const refreshNotifications = useCallback(async (): Promise<void> => {
     try {
@@ -48,6 +53,17 @@ export function AppShell({ role, children }: AppShellProps): React.JSX.Element {
       window.removeEventListener('plagguard:notifications-changed', onChanged);
     };
   }, [refreshNotifications, role]);
+
+  const acknowledge = async (notification: AppNotification): Promise<void> => {
+    if (!canAcknowledge(notification)) return;
+    setNotificationBusy(notification.id);
+    try {
+      await resolveNotification(notification.id);
+      await refreshNotifications();
+    } finally {
+      setNotificationBusy(null);
+    }
+  };
 
   const important = notifications[0] ?? null;
 
@@ -87,6 +103,13 @@ export function AppShell({ role, children }: AppShellProps): React.JSX.Element {
                         <strong>{notification.title}</strong>
                         <span>{notification.message}</span>
                         <small>{new Date(notification.created_at).toLocaleString('es-EC')}</small>
+                        {canAcknowledge(notification) ? (
+                          <button className="notification-action" type="button" disabled={notificationBusy === notification.id} onClick={() => void acknowledge(notification)}>
+                            {notificationBusy === notification.id ? 'Guardando…' : 'Marcar como visto'}
+                          </button>
+                        ) : (
+                          <small>Esta alerta desaparecerá cuando el Administrador habilite el Supletorio.</small>
+                        )}
                       </article>
                     ))}
                   </div>
