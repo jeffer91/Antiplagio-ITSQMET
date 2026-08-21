@@ -328,87 +328,99 @@ export async function runInternalSimilarityAnalysis(
   return result;
 }
 
+function normalizeSafeAnalysis(value: unknown): SimilarityAnalysisResult | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (!raw.id) return null;
+
+  const rawSources = Array.isArray(raw.sources) ? raw.sources : [];
+  const sources: SimilaritySourceResult[] = rawSources.map((item) => {
+    const source = item as Record<string, unknown>;
+    const rawMatches = Array.isArray(source.matches) ? source.matches : [];
+    return {
+      id: String(source.id ?? ''),
+      analysis_id: String(source.analysis_id ?? raw.id),
+      source_version_id: String(source.source_version_id ?? ''),
+      source_document_id: String(source.source_document_id ?? ''),
+      source_owner_id: String(source.source_owner_id ?? ''),
+      source_title: String(source.source_title ?? 'Repositorio institucional'),
+      source_version_number: Number(source.source_version_number ?? 1),
+      similarity_percent: Number(source.similarity_percent ?? 0),
+      matched_words: Number(source.matched_words ?? 0),
+      owner_name: source.owner_name === null || source.owner_name === undefined ? null : String(source.owner_name),
+      matches: rawMatches.map((itemMatch) => {
+        const match = itemMatch as Record<string, unknown>;
+        return {
+          id: String(match.id ?? ''),
+          source_id: String(match.source_id ?? source.id ?? ''),
+          match_type: match.match_type === 'exact' ? 'exact' : 'near',
+          target_start_word: Number(match.target_start_word ?? 0),
+          target_end_word: Number(match.target_end_word ?? 1),
+          source_start_word: Number(match.source_start_word ?? 0),
+          source_end_word: Number(match.source_end_word ?? 1),
+          target_excerpt: String(match.target_excerpt ?? ''),
+          source_excerpt: String(match.source_excerpt ?? ''),
+          similarity_score: Number(match.similarity_score ?? 0),
+          target_covered_ranges: Array.isArray(match.target_covered_ranges)
+            ? match.target_covered_ranges as CoveredWordRange[]
+            : null,
+        } satisfies SimilarityMatch;
+      }),
+    } satisfies SimilaritySourceResult;
+  });
+
+  const adjustmentRaw = raw.adjustment && typeof raw.adjustment === 'object' && !Array.isArray(raw.adjustment)
+    ? raw.adjustment as Record<string, unknown>
+    : null;
+  const adjustment: SimilarityAdjustment | null = adjustmentRaw ? {
+    analysis_id: String(adjustmentRaw.analysis_id ?? raw.id),
+    exclude_bibliography: Boolean(adjustmentRaw.exclude_bibliography),
+    exclude_quoted_text: Boolean(adjustmentRaw.exclude_quoted_text),
+    min_match_words: Number(adjustmentRaw.min_match_words ?? 10),
+    excluded_source_ids: Array.isArray(adjustmentRaw.excluded_source_ids)
+      ? adjustmentRaw.excluded_source_ids.map(String)
+      : [],
+    adjusted_similarity_percent: Number(adjustmentRaw.adjusted_similarity_percent ?? raw.similarity_percent ?? 0),
+    adjusted_matched_words: Number(adjustmentRaw.adjusted_matched_words ?? raw.matched_words ?? 0),
+    saved_by: String(adjustmentRaw.saved_by ?? raw.created_by ?? ''),
+    updated_at: String(adjustmentRaw.updated_at ?? raw.created_at ?? new Date(0).toISOString()),
+  } : null;
+
+  return {
+    id: String(raw.id),
+    target_version_id: String(raw.target_version_id ?? ''),
+    target_document_id: String(raw.target_document_id ?? ''),
+    created_by: String(raw.created_by ?? ''),
+    algorithm_version: String(raw.algorithm_version ?? ''),
+    similarity_percent: Number(raw.similarity_percent ?? 0),
+    matched_words: Number(raw.matched_words ?? 0),
+    total_words: Number(raw.total_words ?? 0),
+    source_count: Number(raw.source_count ?? sources.length),
+    released_to_student: Boolean(raw.released_to_student),
+    created_at: String(raw.created_at ?? ''),
+    sources,
+    adjustment,
+  };
+}
+
 export async function loadLatestSimilarityAnalysis(targetVersionId: string): Promise<SimilarityAnalysisResult | null> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('similarity_analyses')
-    .select('id')
-    .eq('target_version_id', targetVersionId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data, error } = await client.rpc('get_internal_similarity_safe', {
+    p_target_version_id: targetVersionId,
+    p_analysis_id: null,
+  });
   if (error) throw error;
-  if (!data) return null;
-  return loadSimilarityAnalysis(data.id as string);
+  return normalizeSafeAnalysis(data);
 }
 
 export async function loadSimilarityAnalysis(analysisId: string): Promise<SimilarityAnalysisResult | null> {
   const client = requireClient();
-  const { data: analysis, error } = await client
-    .from('similarity_analyses')
-    .select('id,target_version_id,target_document_id,created_by,algorithm_version,similarity_percent,matched_words,total_words,source_count,released_to_student,created_at')
-    .eq('id', analysisId)
-    .maybeSingle();
+  const { data, error } = await client.rpc('get_internal_similarity_safe', {
+    p_target_version_id: null,
+    p_analysis_id: analysisId,
+  });
   if (error) throw error;
-  if (!analysis) return null;
-
-  const { data: sourceRows, error: sourcesError } = await client
-    .from('similarity_sources')
-    .select('id,analysis_id,source_version_id,source_document_id,source_owner_id,source_title,source_version_number,similarity_percent,matched_words')
-    .eq('analysis_id', analysisId)
-    .order('matched_words', { ascending: false });
-  if (sourcesError) throw sourcesError;
-
-  const sources = (sourceRows ?? []) as Omit<SimilaritySourceResult, 'matches'>[];
-  const sourceIds = sources.map((source) => source.id).filter((id): id is string => Boolean(id));
-  let matchRows: SimilarityMatch[] = [];
-  if (sourceIds.length > 0) {
-    const { data: matches, error: matchesError } = await client
-      .from('similarity_matches')
-      .select('id,source_id,match_type,target_start_word,target_end_word,source_start_word,source_end_word,target_excerpt,source_excerpt,similarity_score,target_covered_ranges')
-      .in('source_id', sourceIds)
-      .order('target_start_word', { ascending: true });
-    if (matchesError) throw matchesError;
-    matchRows = (matches ?? []) as SimilarityMatch[];
-  }
-
-  const ownerIds = [...new Set(sources.map((source) => source.source_owner_id).filter(Boolean))];
-  const ownerNames = new Map<string, string>();
-  if (ownerIds.length > 0) {
-    const { data: profiles } = await client.from('profiles').select('id,full_name').in('id', ownerIds);
-    for (const profile of profiles ?? []) ownerNames.set(profile.id as string, (profile.full_name as string) || 'Usuario SIAI');
-  }
-
-  const enrichedSources: SimilaritySourceResult[] = sources.map((source) => ({
-    ...source,
-    owner_name: ownerNames.get(source.source_owner_id) ?? null,
-    similarity_percent: Number(source.similarity_percent),
-    matches: matchRows
-      .map((match) => ({ ...match, similarity_score: Number(match.similarity_score) }))
-      .filter((match) => match.source_id === source.id),
-  }));
-
-  const { data: adjustmentRow, error: adjustmentError } = await client
-    .from('similarity_adjustments')
-    .select('analysis_id,exclude_bibliography,exclude_quoted_text,min_match_words,excluded_source_ids,adjusted_similarity_percent,adjusted_matched_words,saved_by,updated_at')
-    .eq('analysis_id', analysisId)
-    .maybeSingle();
-  if (adjustmentError) throw adjustmentError;
-
-  const adjustment = adjustmentRow
-    ? ({
-        ...adjustmentRow,
-        adjusted_similarity_percent: Number(adjustmentRow.adjusted_similarity_percent),
-        excluded_source_ids: (adjustmentRow.excluded_source_ids ?? []) as string[],
-      } as SimilarityAdjustment)
-    : null;
-
-  return {
-    ...(analysis as Omit<SimilarityAnalysisResult, 'sources' | 'similarity_percent' | 'adjustment'>),
-    similarity_percent: Number(analysis.similarity_percent),
-    sources: enrichedSources,
-    adjustment,
-  };
+  return normalizeSafeAnalysis(data);
 }
 
 export async function saveSimilarityAdjustment(
