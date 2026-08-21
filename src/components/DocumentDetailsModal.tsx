@@ -10,6 +10,7 @@ import { CitationIntegrityPanel } from './CitationIntegrityPanel';
 import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
 import { IntegrityReportPanel } from './IntegrityReportPanel';
 import { SimilarityPanel } from './SimilarityPanel';
+import { UploadDocumentModal } from './UploadDocumentModal';
 
 interface Props {
   document: DocumentListItem | null;
@@ -40,6 +41,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
   const [message, setMessage] = useState<string | null>(null);
   const [runningVersion, setRunningVersion] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
+  const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   const refresh = async (documentId: string): Promise<void> => {
     const [versionRows, attemptRows] = await Promise.all([
@@ -101,64 +103,80 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
   const canRunAnalysis = profile?.role === 'coordinator' || profile?.role === 'admin';
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="modal-card details-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="modal-heading">
-          <div>
-            <span className="eyebrow dark">PlagGuard · Historial completo</span>
-            <h2>{document.title}</h2>
-            <p>{document.owner_name} · {document.owner_email}</p>
-            <p>{document.period_name} · {document.career || 'Carrera sin registrar'} · {document.modality || 'Modalidad sin registrar'}</p>
+    <>
+      <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+        <section className="modal-card details-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-heading">
+            <div>
+              <span className="eyebrow dark">PlagGuard · Historial completo</span>
+              <h2>{document.title}</h2>
+              <p>{document.owner_name} · {document.owner_email}</p>
+              <p>{document.period_name} · {document.career || 'Carrera sin registrar'} · {document.modality || 'Modalidad sin registrar'}</p>
+            </div>
+            <div className="version-action-buttons">
+              {canRunAnalysis && <button className="secondary-button compact-button" type="button" onClick={() => setVersionUploadOpen(true)}>+ Subir nueva versión</button>}
+              <button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
+            </div>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
-        </div>
 
-        {loading && <div className="inline-loading"><span className="mini-spinner" />Cargando historial…</div>}
-        {error && <div className="alert error-alert">{error}</div>}
-        {message && <div className="alert report-success">{message}</div>}
-        {runningVersion && <div className="attempt-progress"><span className="mini-spinner" />{progress}</div>}
+          {loading && <div className="inline-loading"><span className="mini-spinner" />Cargando historial…</div>}
+          {error && <div className="alert error-alert">{error}</div>}
+          {message && <div className="alert report-success">{message}</div>}
+          {runningVersion && <div className="attempt-progress"><span className="mini-spinner" />{progress}</div>}
 
-        <div className="version-stack">
-          {versions.map((version) => {
-            const attempt = attemptsByVersion.get(version.id);
-            const refreshKey = attempt?.id ?? 'sin-intento';
-            return (
-              <article className="version-card" key={version.id}>
-                <div className="version-card-top">
-                  <div><strong>Versión {version.version_number}</strong><span>{new Date(version.created_at).toLocaleString('es-EC')}</span></div>
-                  <div className="version-status-stack">
-                    {attempt && <span className={`attempt-badge ${attempt.status}`}>{attempt.consolidated_similarity.toFixed(1)}% · {attempt.status === 'complies' ? 'Cumple' : 'No cumple'}</span>}
-                    <span className={`document-status ${version.extraction_status}`}>{labels[version.extraction_status]}</span>
+          <div className="version-stack">
+            {versions.map((version) => {
+              const attempt = attemptsByVersion.get(version.id);
+              const refreshKey = attempt?.id ?? 'sin-intento';
+              return (
+                <article className="version-card" key={version.id}>
+                  <div className="version-card-top">
+                    <div><strong>Versión {version.version_number}</strong><span>{new Date(version.created_at).toLocaleString('es-EC')}</span></div>
+                    <div className="version-status-stack">
+                      {attempt && <span className={`attempt-badge ${attempt.status}`}>{attempt.consolidated_similarity.toFixed(1)}% · {attempt.status === 'complies' ? 'Cumple' : 'No cumple'}</span>}
+                      <span className={`document-status ${version.extraction_status}`}>{labels[version.extraction_status]}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="version-meta">
-                  <span>{version.original_file_name}</span><span>{formatBytes(version.size_bytes)}</span><span>{version.word_count.toLocaleString('es-EC')} palabras</span><span>{version.page_count ? `${version.page_count} páginas` : 'Paginación no disponible'}</span>
-                  {attempt && <span>{attemptLabel(attempt)}</span>}
-                </div>
-                {version.extraction_error && <div className="extraction-warning">{version.extraction_error}</div>}
-                {version.extracted_text ? <pre className="text-preview">{version.extracted_text.slice(0, 1800)}{version.extracted_text.length > 1800 ? '\n…' : ''}</pre> : <div className="text-preview empty">No hay texto extraído para mostrar.</div>}
-                <div className="version-actions">
-                  <code title={version.sha256}>SHA-256 {version.sha256.slice(0, 12)}…</code>
-                  <div className="version-action-buttons">
-                    <button className="secondary-button compact-button" type="button" onClick={() => void openOriginal(version)}>Abrir original</button>
-                    {canRunAnalysis && !attempt && (
-                      <button className="primary-button compact" type="button" disabled={runningVersion !== null || version.extraction_status !== 'ready'} onClick={() => void runComplete(version)}>
-                        {runningVersion === version.id ? 'Analizando…' : 'Ejecutar intento completo'}
-                      </button>
-                    )}
+                  <div className="version-meta">
+                    <span>{version.original_file_name}</span><span>{formatBytes(version.size_bytes)}</span><span>{version.word_count.toLocaleString('es-EC')} palabras</span><span>{version.page_count ? `${version.page_count} páginas` : 'Paginación no disponible'}</span>
+                    {attempt && <span>{attemptLabel(attempt)}</span>}
                   </div>
-                </div>
-                {canRunAnalysis && !attempt && <div className="report-note">Los cuatro módulos se ejecutan juntos para que el porcentaje y el intento pertenezcan a una sola ejecución.</div>}
-                <SimilarityPanel key={`internal-${version.id}-${refreshKey}`} version={version} canRun={false} />
-                <ExternalSimilarityPanel key={`external-${version.id}-${refreshKey}`} version={version} canRun={false} />
-                <CitationIntegrityPanel key={`citation-${version.id}-${refreshKey}`} version={version} canRun={false} />
-                <AiWritingPanel key={`ai-${version.id}-${refreshKey}`} version={version} canRun={false} />
-                <IntegrityReportPanel key={`report-${version.id}-${refreshKey}`} document={document} version={version} canRun={canRunAnalysis} />
-              </article>
-            );
-          })}
-        </div>
-      </section>
-    </div>
+                  {version.extraction_error && <div className="extraction-warning">{version.extraction_error}</div>}
+                  {version.extracted_text ? <pre className="text-preview">{version.extracted_text.slice(0, 1800)}{version.extracted_text.length > 1800 ? '\n…' : ''}</pre> : <div className="text-preview empty">No hay texto extraído para mostrar.</div>}
+                  <div className="version-actions">
+                    <code title={version.sha256}>SHA-256 {version.sha256.slice(0, 12)}…</code>
+                    <div className="version-action-buttons">
+                      <button className="secondary-button compact-button" type="button" onClick={() => void openOriginal(version)}>Abrir original</button>
+                      {canRunAnalysis && !attempt && (
+                        <button className="primary-button compact" type="button" disabled={runningVersion !== null || version.extraction_status !== 'ready'} onClick={() => void runComplete(version)}>
+                          {runningVersion === version.id ? 'Analizando…' : 'Ejecutar intento completo'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {canRunAnalysis && !attempt && <div className="report-note">Los cuatro módulos se ejecutan juntos para que el porcentaje y el intento pertenezcan a una sola ejecución.</div>}
+                  <SimilarityPanel key={`internal-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                  <ExternalSimilarityPanel key={`external-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                  <CitationIntegrityPanel key={`citation-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                  <AiWritingPanel key={`ai-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                  <IntegrityReportPanel key={`report-${version.id}-${refreshKey}`} document={document} version={version} canRun={canRunAnalysis} />
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <UploadDocumentModal
+        open={versionUploadOpen}
+        document={document}
+        onClose={() => setVersionUploadOpen(false)}
+        onUploaded={async () => {
+          await refresh(document.id);
+          setVersionUploadOpen(false);
+          setMessage('Nueva versión cargada para el estudiante. Ya puede ejecutarse como el siguiente intento.');
+        }}
+      />
+    </>
   );
 }
