@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { loadNotifications } from '../lib/plagGuard';
 import type { AppRole } from '../types/auth';
@@ -17,14 +17,37 @@ const roleLabels: Record<AppRole, string> = {
 export function AppShell({ role, children }: AppShellProps): React.JSX.Element {
   const { profile, signOut } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const refreshNotifications = useCallback(async (): Promise<void> => {
+    try {
+      setNotifications(await loadNotifications());
+    } catch {
+      setNotifications([]);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
-    void loadNotifications()
-      .then((items) => active && setNotifications(items))
-      .catch(() => active && setNotifications([]));
-    return () => { active = false; };
-  }, [role]);
+    const refresh = async (): Promise<void> => {
+      if (!active) return;
+      await refreshNotifications();
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onFocus = (): void => { void refresh(); };
+    const onChanged = (): void => { void refresh(); };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('plagguard:notifications-changed', onChanged);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('plagguard:notifications-changed', onChanged);
+    };
+  }, [refreshNotifications, role]);
 
   const important = notifications[0] ?? null;
 
@@ -37,9 +60,39 @@ export function AppShell({ role, children }: AppShellProps): React.JSX.Element {
         </div>
 
         <div className="topbar-actions">
-          <div className="notification-bell" title={`${notifications.length} alertas pendientes`} aria-label={`${notifications.length} alertas pendientes`}>
-            <span aria-hidden="true">●</span>
-            {notifications.length > 0 && <strong>{notifications.length}</strong>}
+          <div className="notification-wrap">
+            <button
+              className={`notification-bell ${notifications.length > 0 ? 'has-alerts' : ''}`}
+              type="button"
+              title={`${notifications.length} alertas pendientes`}
+              aria-label={`${notifications.length} alertas pendientes`}
+              aria-expanded={notificationsOpen}
+              onClick={() => setNotificationsOpen((current) => !current)}
+            >
+              <span aria-hidden="true">●</span>
+              {notifications.length > 0 && <strong>{notifications.length}</strong>}
+            </button>
+            {notificationsOpen && (
+              <div className="notification-popover" role="status">
+                <div className="notification-popover-heading">
+                  <strong>Alertas de PlagGuard</strong>
+                  <span>{notifications.length} pendientes</span>
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="notification-empty">No tienes alertas pendientes.</p>
+                ) : (
+                  <div className="notification-list">
+                    {notifications.map((notification) => (
+                      <article key={notification.id} className="notification-item">
+                        <strong>{notification.title}</strong>
+                        <span>{notification.message}</span>
+                        <small>{new Date(notification.created_at).toLocaleString('es-EC')}</small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="role-pill">{roleLabels[role]}</div>
           <div className="topbar-user">
