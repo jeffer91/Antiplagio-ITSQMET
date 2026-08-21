@@ -70,6 +70,18 @@ export interface AnalysisAttempt {
   created_at: string;
 }
 
+export interface StudentCurrentResult {
+  available: boolean;
+  id?: string;
+  target_document_id?: string;
+  target_version_id?: string;
+  process?: AttemptProcess;
+  attempt_number?: number;
+  consolidated_similarity?: number;
+  status?: AttemptStatus;
+  created_at?: string;
+}
+
 export interface AppNotification {
   id: string;
   user_id: string;
