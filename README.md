@@ -80,6 +80,7 @@ Cuando una coincidencia proviene del repositorio interno, el estudiante no recib
 El Coordinador puede:
 
 - cargar un trabajo en nombre de un estudiante;
+- subir nuevas versiones corregidas para el estudiante;
 - ejecutar el intento completo;
 - consultar el historial completo de versiones e intentos;
 - revisar evidencia interna y externa;
@@ -91,14 +92,15 @@ Aunque el Coordinador cargue el archivo, **el estudiante permanece como propieta
 
 ### Administrador
 
-El Administrador puede realizar las funciones del personal autorizado y además:
+El Administrador puede:
 
 - crear y activar periodos;
 - abrir/cerrar Ordinario;
 - abrir/cerrar Supletorio;
 - asignar periodo, carrera y modalidad a estudiantes;
-- administrar roles;
-- gestionar la inclusión/exclusión administrativa del repositorio institucional.
+- administrar roles.
+
+La base de datos también dispone de funciones administrativas para controlar la inclusión/exclusión del repositorio institucional; esa gestión avanzada no forma parte todavía del panel visual principal.
 
 ## Flujo del estudiante
 
@@ -143,6 +145,7 @@ El informe oficial:
 - se almacena como una instantánea inmutable;
 - recibe una huella SHA-256 calculada en el servidor;
 - se verifica en el servidor antes de permitir exportación;
+- los informes históricos solo se consideran verificables si además están ligados a un intento Cumple con la misma evidencia y porcentaje;
 - es de uso exclusivo de Coordinador/Administrador.
 
 El estudiante recibe su resultado y correcciones en la interfaz de PlagGuard, no el informe institucional completo.
@@ -155,7 +158,8 @@ Las alertas funcionan dentro de PlagGuard:
 - listado de alertas pendientes;
 - banner visible para la alerta prioritaria;
 - actualización automática durante la sesión;
-- actualización al volver a enfocar la aplicación.
+- actualización al volver a enfocar la aplicación;
+- alertas de Supletorio ligadas al periodo y al estudiante.
 
 Los avisos de espera de Supletorio se resuelven cuando el Administrador habilita el proceso correspondiente.
 
@@ -177,6 +181,7 @@ En un proyecto nuevo, ejecuta **una sola vez y en este orden**:
 12. `supabase/phase12.sql`
 13. `supabase/phase13.sql`
 14. `supabase/phase14.sql`
+15. `supabase/phase15.sql`
 
 Las fases 10 y 12 contienen renombrados de funciones y deben tratarse como migraciones secuenciales, no como scripts para ejecutar repetidamente.
 
@@ -231,3 +236,5 @@ El workflow `.github/workflows/ci.yml` ejecuta instalación, typecheck/build y `
 ## Importante antes de producción
 
 El código del repositorio y las migraciones deben mantenerse sincronizados. Un cambio en `main` que dependa de una fase nueva de Supabase no queda operativo en una instalación existente hasta aplicar esa migración y, cuando corresponda, desplegar nuevamente las Edge Functions.
+
+La huella SHA-256 del archivo original se calcula actualmente en el cliente antes de la carga. Para una cadena de custodia de nivel forense, queda como endurecimiento futuro verificar también los bytes del archivo en un entorno de servidor controlado.
