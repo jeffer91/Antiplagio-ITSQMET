@@ -88,6 +88,110 @@
   background: #f2faf5;
 }
 
+.notification-wrap {
+  position: relative;
+}
+
+.notification-bell {
+  min-width: 38px;
+  height: 38px;
+  border: 1px solid #dbe2ec;
+  border-radius: 11px;
+  background: #fff;
+  color: #9aa6b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.notification-bell.has-alerts {
+  color: #a33a34;
+  background: #fff7f6;
+  border-color: #f0cbc8;
+}
+
+.notification-bell strong {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #a33a34;
+  color: #fff;
+  font-size: 10px;
+}
+
+.notification-popover {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 90;
+  width: min(380px, calc(100vw - 28px));
+  max-height: 430px;
+  overflow: hidden;
+  border: 1px solid #dbe2ec;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(35, 49, 72, 0.16);
+}
+
+.notification-popover-heading {
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.notification-popover-heading strong {
+  color: #253349;
+  font-size: 12px;
+}
+
+.notification-popover-heading span,
+.notification-item small {
+  color: #7a8799;
+  font-size: 10px;
+}
+
+.notification-list {
+  max-height: 365px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  padding: 12px 15px;
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-item strong {
+  color: #253349;
+  font-size: 12px;
+}
+
+.notification-item span,
+.notification-empty {
+  color: #5f6d82;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.notification-empty {
+  margin: 0;
+  padding: 18px 15px;
+}
+
 @media (max-width: 760px) {
   .coordinator-filter-card {
     align-items: stretch;
@@ -101,5 +205,13 @@
   .version-action-buttons {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .notification-popover {
+    position: fixed;
+    top: 70px;
+    right: 14px;
+    left: 14px;
+    width: auto;
   }
 }
