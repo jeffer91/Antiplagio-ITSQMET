@@ -192,6 +192,24 @@
   padding: 18px 15px;
 }
 
+.notification-action {
+  justify-self: start;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #365f91;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notification-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 @media (max-width: 760px) {
   .coordinator-filter-card {
     align-items: stretch;
