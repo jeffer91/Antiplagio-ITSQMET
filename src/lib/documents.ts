@@ -48,7 +48,7 @@ export async function loadDocuments(): Promise<DocumentListItem[]> {
   const client = requireClient();
   const { data: documents, error } = await client
     .from('documents')
-    .select('id,owner_id,title,current_version,status,created_at,updated_at')
+    .select('id,owner_id,academic_period_id,career,modality,title,current_version,status,created_at,updated_at')
     .order('updated_at', { ascending: false });
   if (error) throw error;
 
@@ -57,34 +57,43 @@ export async function loadDocuments(): Promise<DocumentListItem[]> {
 
   const ids = docs.map((document) => document.id);
   const ownerIds = [...new Set(docs.map((document) => document.owner_id))];
+  const periodIds = [...new Set(docs.map((document) => document.academic_period_id).filter((id): id is string => Boolean(id)))];
 
-  const [{ data: versions, error: versionsError }, { data: profiles, error: profilesError }] = await Promise.all([
+  const [versionsResult, profilesResult, periodsResult] = await Promise.all([
     client
       .from('document_versions')
       .select('id,document_id,version_number,uploaded_by,original_file_name,mime_type,size_bytes,sha256,storage_path,extracted_text,extracted_pages,word_count,character_count,page_count,extraction_status,extraction_error,created_at')
       .in('document_id', ids)
       .order('version_number', { ascending: false }),
     client.from('profiles').select('id,full_name,email').in('id', ownerIds),
+    periodIds.length > 0
+      ? client.from('academic_periods').select('id,name').in('id', periodIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (versionsError) throw versionsError;
-  if (profilesError) throw profilesError;
+  if (versionsResult.error) throw versionsResult.error;
+  if (profilesResult.error) throw profilesResult.error;
+  if (periodsResult.error) throw periodsResult.error;
 
   const latestByDocument = new Map<string, DocumentVersion>();
-  for (const version of (versions ?? []) as DocumentVersion[]) {
+  for (const version of (versionsResult.data ?? []) as DocumentVersion[]) {
     if (!latestByDocument.has(version.document_id)) latestByDocument.set(version.document_id, version);
   }
 
   const profileById = new Map(
-    (profiles ?? []).map((profile) => [profile.id as string, profile as { id: string; full_name: string; email: string }]),
+    (profilesResult.data ?? []).map((profile) => [profile.id as string, profile as { id: string; full_name: string; email: string }]),
+  );
+  const periodById = new Map(
+    (periodsResult.data ?? []).map((period) => [String(period.id), String(period.name)]),
   );
 
   return docs.map((document) => {
     const owner = profileById.get(document.owner_id);
     return {
       ...document,
-      owner_name: owner?.full_name || 'Usuario SIAI',
+      owner_name: owner?.full_name || 'Estudiante',
       owner_email: owner?.email || '',
+      period_name: document.academic_period_id ? periodById.get(document.academic_period_id) || 'Periodo sin nombre' : 'Sin periodo',
       latest_version: latestByDocument.get(document.id) ?? null,
     };
   });
@@ -112,10 +121,72 @@ interface UploadDocumentInput {
   title: string;
   file: File;
   documentId?: string;
+  ownerId?: string;
+  periodId?: string;
+  career?: string;
+  modality?: string;
   onProgress?: (step: UploadProgressStep) => void;
 }
 
-export async function uploadDocumentVersion({ title, file, documentId, onProgress }: UploadDocumentInput): Promise<{ documentId: string; versionNumber: number }> {
+interface ResolvedAcademicContext {
+  ownerId: string;
+  periodId: string;
+  career: string;
+  modality: string;
+}
+
+async function resolveAcademicContext(input: UploadDocumentInput, currentUserId: string): Promise<ResolvedAcademicContext> {
+  const client = requireClient();
+
+  if (input.documentId) {
+    const { data, error } = await client
+      .from('documents')
+      .select('owner_id,academic_period_id,career,modality')
+      .eq('id', input.documentId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('El documento ya no existe.');
+    if (!data.academic_period_id || !data.career || !data.modality) {
+      throw new Error('El documento no tiene contexto académico. El Administrador debe regularizarlo antes de crear otra versión.');
+    }
+    return {
+      ownerId: String(data.owner_id),
+      periodId: String(data.academic_period_id),
+      career: String(data.career),
+      modality: String(data.modality),
+    };
+  }
+
+  if (input.ownerId && input.periodId && input.career && input.modality) {
+    return {
+      ownerId: input.ownerId,
+      periodId: input.periodId,
+      career: input.career,
+      modality: input.modality,
+    };
+  }
+
+  const ownerId = input.ownerId ?? currentUserId;
+  const { data, error } = await client
+    .from('student_enrollments')
+    .select('period_id,career,modality')
+    .eq('student_id', ownerId)
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('El estudiante todavía no tiene periodo, carrera y modalidad asignados.');
+  return {
+    ownerId,
+    periodId: String(data.period_id),
+    career: String(data.career),
+    modality: String(data.modality),
+  };
+}
+
+export async function uploadDocumentVersion(input: UploadDocumentInput): Promise<{ documentId: string; versionNumber: number }> {
+  const { title, file, documentId, onProgress } = input;
   const client = requireClient();
   onProgress?.('validating');
   validateFile(file);
@@ -127,6 +198,7 @@ export async function uploadDocumentVersion({ title, file, documentId, onProgres
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) throw new Error('La sesión no es válida. Vuelve a iniciar sesión.');
   const userId = userData.user.id;
+  const context = await resolveAcademicContext(input, userId);
   const resolvedDocumentId = documentId ?? crypto.randomUUID();
 
   onProgress?.('extracting');
@@ -147,7 +219,7 @@ export async function uploadDocumentVersion({ title, file, documentId, onProgres
   }
 
   const storedName = safeFileName(file.name);
-  const storagePath = `${userId}/${resolvedDocumentId}/${hash.slice(0, 16)}-${storedName}`;
+  const storagePath = `${context.ownerId}/${resolvedDocumentId}/${hash.slice(0, 16)}-${storedName}`;
 
   onProgress?.('uploading');
   const { error: uploadError } = await client.storage.from(DOCUMENT_BUCKET).upload(storagePath, file, {
@@ -159,8 +231,12 @@ export async function uploadDocumentVersion({ title, file, documentId, onProgres
 
   try {
     onProgress?.('registering');
-    const { data, error } = await client.rpc('register_document_version', {
+    const { data, error } = await client.rpc('register_document_version_v2', {
       p_document_id: resolvedDocumentId,
+      p_owner_id: context.ownerId,
+      p_period_id: context.periodId,
+      p_career: context.career,
+      p_modality: context.modality,
       p_title: cleanTitle,
       p_original_file_name: file.name,
       p_mime_type: file.type || (storedName.endsWith('.pdf') ? PDF_MIME : DOCX_MIME),
