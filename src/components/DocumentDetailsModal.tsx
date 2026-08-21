@@ -120,6 +120,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
         <div className="version-stack">
           {versions.map((version) => {
             const attempt = attemptsByVersion.get(version.id);
+            const refreshKey = attempt?.id ?? 'sin-intento';
             return (
               <article className="version-card" key={version.id}>
                 <div className="version-card-top">
@@ -146,11 +147,11 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                     )}
                   </div>
                 </div>
-                <SimilarityPanel version={version} canRun={canRunAnalysis} />
-                <ExternalSimilarityPanel version={version} canRun={canRunAnalysis} />
-                <CitationIntegrityPanel version={version} canRun={canRunAnalysis} />
-                <AiWritingPanel version={version} canRun={canRunAnalysis} />
-                <IntegrityReportPanel document={document} version={version} canRun={canRunAnalysis} />
+                <SimilarityPanel key={`internal-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                <ExternalSimilarityPanel key={`external-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                <CitationIntegrityPanel key={`citation-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                <AiWritingPanel key={`ai-${version.id}-${refreshKey}`} version={version} canRun={false} />
+                <IntegrityReportPanel key={`report-${version.id}-${refreshKey}`} document={document} version={version} canRun={canRunAnalysis} />
               </article>
             );
           })}
