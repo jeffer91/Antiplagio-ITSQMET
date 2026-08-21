@@ -1,146 +1,167 @@
-# SIAI — Antiplagio ITSQMET
+# PlagGuard · ITSQMET
 
-Sistema de Integridad Académica Institucional. Aplicación Electron para entregas académicas, similitud interna y externa, revisión de citas y bibliografía, indicadores de escritura asistida por IA e informes finales verificables.
+Aplicación institucional de integridad académica para gestionar entregas, versiones, intentos y evidencia de similitud del ITSQMET.
 
-## Estado
+## Estado actual
 
-**Fase 8 — Informes finales PDF y Excel**
+**PlagGuard 1.0**
 
 - Electron + React + TypeScript + Vite.
-- Supabase Auth con roles `student` y `coordinator`.
-- PDF y DOCX de hasta 25 MB, Storage privado, SHA-256 y versiones inmutables.
-- Similitud institucional contra el corpus ITSQMET.
-- Informe interactivo con exclusiones y porcentaje ajustado.
-- Búsqueda externa con OpenAlex, CORE, Semantic Scholar, Crossref y web opcional.
-- Revisión de citas, referencias y hallazgos APA 7.
-- Indicadores estilométricos por fragmento y revisión humana.
-- Informe final consolidado con estado, observación del coordinador y trazabilidad de los análisis utilizados.
-- Exportación a PDF mediante `webContents.printToPDF` de Electron.
-- Exportación para Excel mediante SpreadsheetML compatible con Excel (`.xls`).
-- Instantáneas de informe inmutables, versionadas y selladas con SHA-256.
-- El estudiante solo puede abrir y descargar informes finales liberados por el coordinador.
-- CI valida la aplicación y las tres Edge Functions con TypeScript/Deno.
+- Supabase Auth, PostgreSQL, RLS y Storage privado.
+- Roles: `student`, `coordinator` y `admin`.
+- PDF y DOCX de hasta 25 MB.
+- Versiones inmutables y huella SHA-256 del archivo.
+- Similitud institucional contra el repositorio final ITSQMET.
+- Búsqueda externa con OpenAlex, CORE, Semantic Scholar, Crossref y Brave opcional.
+- Revisión de citas, referencias y APA 7.
+- Señales estilométricas de escritura asistida para revisión humana; no se presentan como prueba de autoría por IA.
+- Similitud consolidada por cobertura única de palabras para evitar doble conteo.
+- Intentos Ordinario/Supletorio con trazabilidad completa.
+- Informe oficial PDF/Excel exclusivo de Coordinador/Administrador.
 
-## Principio de la Fase 8
+## Regla institucional
 
-El informe final no recalcula ni sobrescribe la evidencia histórica. Cuando el coordinador crea un informe, SIAI toma una **instantánea** de los últimos análisis accesibles de esa versión:
+PlagGuard utiliza como resultado del intento la **similitud consolidada ajustada**.
 
 ```text
-Versión del estudiante
-        ↓
-Similitud institucional + ajustes
-        ↓
-Similitud externa verificada
-        ↓
-Citas + referencias + APA 7
-        ↓
-Indicadores de escritura asistida por IA
-        ↓
-Cobertura consolidada sin doble conteo
-        ↓
-Estado + observación del coordinador
-        ↓
-Instantánea JSON + SHA-256
-        ↓
-PDF / Excel / liberación al estudiante
+0 % a 20 %   → Cumple
+más de 20 %  → No cumple
 ```
 
-Si después se ejecuta un análisis nuevo o cambia una exclusión, el informe anterior **no se modifica**. El coordinador crea el Informe #2, #3, etc.
+El porcentaje consolidado no suma simplemente similitud interna + externa. Se calcula sobre las palabras cubiertas, evitando contabilizar dos veces un mismo fragmento encontrado en varias fuentes.
 
-## Similitud consolidada
+Las citas textuales y bibliografía pueden excluirse del cálculo de forma controlada. Las fuentes externas disponibles solo como abstract, snippet o metadatos pueden mostrarse como evidencia de revisión, pero no aumentan el porcentaje institucional.
 
-SIAI no suma porcentajes internos y externos.
+## Intentos
 
-Si las palabras 200–250 aparecen tanto en un trabajo del repositorio ITSQMET como en una publicación pública, esa cobertura se contabiliza una sola vez.
+Cada estudiante dispone de:
 
-El informe conserva:
+- **Ordinario: 3 intentos**.
+- **Supletorio: 3 intentos adicionales**.
+- Límite: **20 % en ambos procesos**.
 
-- similitud consolidada original;
-- similitud consolidada ajustada;
-- similitud institucional original;
-- similitud institucional ajustada;
-- similitud externa verificada.
+Cada intento queda ligado a una versión concreta del archivo y registra:
 
-Para la consolidada ajustada se reutilizan los filtros guardados en el análisis institucional: exclusión de bibliografía, citas textuales y coincidencias pequeñas. Las exclusiones de fuentes institucionales se respetan únicamente sobre las fuentes institucionales correspondientes.
+- estudiante;
+- periodo;
+- versión;
+- Ordinario o Supletorio;
+- número de intento;
+- porcentaje consolidado;
+- Cumple / No cumple;
+- usuario que ejecutó el análisis;
+- fecha;
+- observación;
+- identificadores de los cuatro análisis utilizados.
 
-## Contenido del PDF
+La primera versión que obtiene **Cumple** cierra el proceso. Los intentos anteriores permanecen en el historial institucional.
 
-El PDF incluye:
+Si se agotan los tres intentos Ordinarios sin Cumple, el sistema muestra **Pasa a Supletorio** y genera alertas internas. Los intentos adicionales no se habilitan automáticamente: el **Administrador** debe abrir el Supletorio del periodo.
 
-1. identificación del estudiante, trabajo, versión y archivo;
-2. SHA-256 del archivo original;
-3. resultado/estado definido por el coordinador;
-4. observación final;
-5. resumen ejecutivo de indicadores;
-6. similitud institucional y fuentes;
-7. similitud externa verificada y fuentes;
-8. citas, referencias y APA 7;
-9. indicadores de escritura asistida por IA no descartados;
-10. identificadores de los análisis utilizados;
-11. SHA-256 de la instantánea del informe;
-12. nota de interpretación académica.
+## Roles
 
-El PDF se genera localmente desde Electron y se guarda en la ubicación elegida por el usuario.
+### Estudiante
 
-## Excel
+El estudiante puede:
 
-La exportación genera un libro SpreadsheetML compatible con Microsoft Excel con hojas separadas:
+- cargar su trabajo;
+- subir nuevas versiones mientras tenga intentos disponibles;
+- ejecutar el análisis completo;
+- ver su porcentaje exacto y Cumple/No cumple;
+- ver qué fragmentos debe corregir, por qué aparecen y qué acción se recomienda;
+- consultar alertas de similitud, citas, referencias, APA 7 y señales de escritura asistida.
 
-- `Resumen`
-- `Similitud interna`
-- `Fuentes externas`
-- `Citas y APA`
-- `Referencias`
-- `Indicadores IA`
+El estudiante **no accede al historial completo de intentos** ni al informe oficial institucional.
 
-No se añade una dependencia pesada de terceros para esta fase: el archivo se produce desde SIAI y se guarda mediante el proceso principal de Electron.
+Cuando una coincidencia proviene del repositorio interno, el estudiante no recibe el nombre, propietario ni texto de la obra institucional utilizada como fuente.
 
-## Integridad del informe
+### Coordinador
 
-Cada instantánea almacena:
+El Coordinador puede:
+
+- cargar un trabajo en nombre de un estudiante;
+- ejecutar el intento completo;
+- consultar el historial completo de versiones e intentos;
+- revisar evidencia interna y externa;
+- consultar citas, APA y señales de escritura asistida;
+- generar el informe oficial cuando una versión obtiene Cumple;
+- exportar el informe oficial a PDF y Excel.
+
+Aunque el Coordinador cargue el archivo, **el estudiante permanece como propietario del trabajo**.
+
+### Administrador
+
+El Administrador puede realizar las funciones del personal autorizado y además:
+
+- crear y activar periodos;
+- abrir/cerrar Ordinario;
+- abrir/cerrar Supletorio;
+- asignar periodo, carrera y modalidad a estudiantes;
+- administrar roles;
+- gestionar la inclusión/exclusión administrativa del repositorio institucional.
+
+## Flujo del estudiante
 
 ```text
-report_number
-report_schema_version
-final_status
-final_observation
-snapshot
-snapshot_sha256
-created_at
-released_to_student
+Administrador asigna periodo + carrera + modalidad
+                    ↓
+Estudiante carga PDF/DOCX
+                    ↓
+Extracción + SHA-256 + versión
+                    ↓
+1. Similitud institucional segura
+                    ↓
+2. Similitud externa
+                    ↓
+3. Citas + referencias + APA 7
+                    ↓
+4. Señales de escritura asistida
+                    ↓
+Similitud consolidada ajustada
+                    ↓
+          ≤20 %             >20 %
+          Cumple           No cumple
+             ↓                 ↓
+     proceso cerrado     correcciones +
+                         nueva versión
 ```
 
-Antes de permitir una descarga, el renderer vuelve a canonicalizar la instantánea y recalcula SHA-256. Si la huella no coincide, SIAI bloquea la exportación.
+## Repositorio institucional
 
-## Privacidad
+El corpus institucional no contiene todas las cargas intermedias. Solo incorpora la **versión final que obtuvo Cumple**.
 
-El informe final destinado al estudiante no expone el nombre del propietario de un trabajo institucional coincidente. Las fuentes internas aparecen como **Repositorio institucional ITSQMET**.
+La comparación institucional se ejecuta en PostgreSQL para evitar entregar el corpus completo al equipo del estudiante. La lectura de resultados del estudiante está anonimizada.
 
-Las alertas de IA marcadas por el coordinador como **Descartar alerta** tampoco forman parte de la instantánea final.
+## Informe oficial
 
-El estudiante:
+El informe oficial:
 
-- solo accede a sus propios documentos;
-- no crea informes finales;
-- no cambia el resultado final;
-- no modifica la instantánea;
-- solo descarga un informe cuando el coordinador lo libera.
+- solo puede generarse para una versión que obtuvo **Cumple**;
+- exige los cuatro módulos de análisis;
+- debe utilizar exactamente los identificadores de análisis registrados en el intento Cumple;
+- debe conservar el mismo porcentaje consolidado del intento;
+- se almacena como una instantánea inmutable;
+- recibe una huella SHA-256 calculada en el servidor;
+- se verifica en el servidor antes de permitir exportación;
+- es de uso exclusivo de Coordinador/Administrador.
 
-## Estados del informe
+El estudiante recibe su resultado y correcciones en la interfaz de PlagGuard, no el informe institucional completo.
 
-El coordinador puede guardar cada instantánea con uno de estos estados:
+## Alertas
 
-- Pendiente de decisión
-- Aprobado
-- Con observaciones
-- Requiere corrección
-- No aprobado
+Las alertas funcionan dentro de PlagGuard:
 
-El estado forma parte de la instantánea histórica. Para cambiarlo posteriormente se genera un informe nuevo.
+- contador en la campana;
+- listado de alertas pendientes;
+- banner visible para la alerta prioritaria;
+- actualización automática durante la sesión;
+- actualización al volver a enfocar la aplicación.
+
+Los avisos de espera de Supletorio se resuelven cuando el Administrador habilita el proceso correspondiente.
 
 ## Preparar Supabase
 
-En un proyecto nuevo ejecuta, en este orden:
+En un proyecto nuevo, ejecuta **una sola vez y en este orden**:
 
 1. `supabase/schema.sql`
 2. `supabase/phase2.sql`
@@ -150,18 +171,26 @@ En un proyecto nuevo ejecuta, en este orden:
 6. `supabase/phase6.sql`
 7. `supabase/phase7.sql`
 8. `supabase/phase8.sql`
+9. `supabase/phase9.sql`
+10. `supabase/phase10.sql`
+11. `supabase/phase11.sql`
+12. `supabase/phase12.sql`
+13. `supabase/phase13.sql`
+14. `supabase/phase14.sql`
 
-Después convierte únicamente la cuenta administrativa en coordinador:
+Las fases 10 y 12 contienen renombrados de funciones y deben tratarse como migraciones secuenciales, no como scripts para ejecutar repetidamente.
+
+Después asigna al menos una cuenta como Administrador. Por ejemplo:
 
 ```sql
 update public.profiles
-set role = 'coordinator'
+set role = 'admin'
 where email = 'TU_CORREO';
 ```
 
 ## Edge Functions
 
-Despliega las tres funciones actuales:
+Despliega las tres funciones:
 
 ```powershell
 supabase functions deploy external-similarity
@@ -169,33 +198,16 @@ supabase functions deploy citation-integrity
 supabase functions deploy ai-writing-indicators
 ```
 
-La Fase 8 no agrega una Edge Function nueva: la consolidación del snapshot utiliza datos protegidos por RLS y la exportación PDF/Excel se realiza en Electron.
+Variables privadas de proveedores se configuran como secretos de Supabase/Edge Functions. Nunca deben almacenarse en Electron.
 
-## Flujo actual
+## Variables del renderer
 
-```text
-Estudiante carga PDF/DOCX
-        ↓
-Extracción + SHA-256 + versiones
-        ↓
-Similitud interna ITSQMET
-        ↓
-Exclusiones + recálculo
-        ↓
-Búsqueda externa pública
-        ↓
-Citas + bibliografía + APA 7
-        ↓
-Indicadores de escritura asistida por IA
-        ↓
-Revisión humana
-        ↓
-Informe final versionado + SHA-256
-        ↓
-PDF / Excel
-        ↓
-Coordinador libera al estudiante
+```env
+VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REEMPLAZAR
 ```
+
+Nunca coloques `service_role` ni claves privadas de proveedores en el cliente.
 
 ## Desarrollo
 
@@ -207,15 +219,6 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-Configura `.env` del renderer solo con valores publicables:
-
-```env
-VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REEMPLAZAR
-```
-
-Nunca coloques una clave `service_role` o claves privadas de proveedores dentro de Electron.
-
 ## Validación
 
 ```powershell
@@ -223,57 +226,8 @@ npm run typecheck
 npm run build
 ```
 
-GitHub Actions también ejecuta:
+El workflow `.github/workflows/ci.yml` ejecuta instalación, typecheck/build y `deno check` de las tres Edge Functions en cada push a `main` y en cada pull request.
 
-```text
-deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts supabase/functions/ai-writing-indicators/index.ts
-```
+## Importante antes de producción
 
-## Estructura relevante
-
-```text
-src/
-  components/
-    SimilarityPanel.tsx
-    SimilarityReportModal.tsx
-    ExternalSimilarityPanel.tsx
-    CitationIntegrityPanel.tsx
-    AiWritingPanel.tsx
-    IntegrityReportPanel.tsx
-  lib/
-    similarity.ts
-    similarityView.ts
-    externalSimilarity.ts
-    citationIntegrity.ts
-    aiWriting.ts
-    integrityReport.ts
-  types/
-    similarity.ts
-    externalSimilarity.ts
-    citationIntegrity.ts
-    aiWriting.ts
-    integrityReport.ts
-    desktop.d.ts
-  phase8.css
-electron/
-  main.ts
-  preload.ts
-supabase/
-  phase8.sql
-```
-
-## Ruta del proyecto
-
-- Fase 1: Electron + React + Supabase + roles ✅
-- Fase 2: carga PDF/DOCX + almacenamiento + versiones + extracción ✅
-- Fase 3: similitud contra corpus institucional ✅
-- Fase 4: visor interactivo + exclusiones + recálculo ✅
-- Fase 5: fuentes académicas y web públicas ✅
-- Fase 6: citas + referencias + verificación bibliográfica + APA 7 ✅
-- Fase 7: indicadores de escritura asistida por IA + revisión humana ✅
-- Fase 8: informes finales PDF/Excel + snapshot SHA-256 ✅
-- Fase 9: instalador y actualizaciones
-
-## Principio del sistema
-
-SIAI presenta evidencia para revisión académica. Ningún porcentaje, referencia no localizada o indicador automático constituye por sí solo una conclusión de plagio, fabricación de fuentes o uso indebido de inteligencia artificial. La decisión final corresponde a la persona responsable de la evaluación.
+El código del repositorio y las migraciones deben mantenerse sincronizados. Un cambio en `main` que dependa de una fase nueva de Supabase no queda operativo en una instalación existente hasta aplicar esa migración y, cuando corresponda, desplegar nuevamente las Edge Functions.
