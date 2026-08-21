@@ -1,0 +1,105 @@
+.coordinator-filter-card {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.coordinator-filters {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.coordinator-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #69768a;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.coordinator-filters select {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid #d9e0ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #253349;
+}
+
+.filter-count {
+  color: #718096;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.version-status-stack {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.attempt-badge {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.attempt-badge.complies {
+  background: #e7f6ed;
+  color: #17663b;
+}
+
+.attempt-badge.does_not_comply {
+  background: #fcebea;
+  color: #9b2f29;
+}
+
+.version-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.attempt-progress {
+  margin: 10px 0 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8e1ed;
+  border-radius: 11px;
+  background: #f6f8fb;
+  color: #506078;
+  font-size: 12px;
+}
+
+.report-empty.success-ready {
+  border-color: #b8dcc8;
+  background: #f2faf5;
+}
+
+@media (max-width: 760px) {
+  .coordinator-filter-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .coordinator-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .version-action-buttons {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
