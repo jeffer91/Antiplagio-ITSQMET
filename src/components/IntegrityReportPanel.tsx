@@ -4,8 +4,8 @@ import {
   exportIntegrityReportPdf,
   loadLatestIntegrityReport,
   saveIntegrityReport,
-  verifyIntegrityReport,
 } from '../lib/integrityReport';
+import { verifyOfficialReport } from '../lib/reportVerification';
 import { loadDocumentAttempts } from '../lib/staffWorkflow';
 import type { DocumentListItem, DocumentVersion } from '../types/documents';
 import type { IntegrityReportFinalStatus, IntegrityReportRecord } from '../types/integrityReport';
@@ -59,7 +59,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
         setAttempt(attempts.find((item) => item.target_version_id === version.id) ?? null);
         if (result) {
           setObservation(result.final_observation ?? '');
-          setVerified(await verifyIntegrityReport(result));
+          setVerified(await verifyOfficialReport(result));
         }
       })
       .catch((caught) => active && setError(caught instanceof Error ? caught.message : 'No fue posible cargar el informe oficial.'))
@@ -84,7 +84,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     try {
       const next = await saveIntegrityReport(document, version, 'approved', observation);
       setReport(next);
-      setVerified(await verifyIntegrityReport(next));
+      setVerified(await verifyOfficialReport(next));
       setMessage(`Informe oficial #${next.report_number} creado y sellado con SHA-256.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible crear el informe oficial.');
