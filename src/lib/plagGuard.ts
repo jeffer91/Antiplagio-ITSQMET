@@ -1,12 +1,5 @@
-import { runAiWritingAnalysis } from './aiWriting';
-import { runCitationIntegrityAnalysis } from './citationIntegrity';
-import { runExternalSimilarityAnalysis } from './externalSimilarity';
-import { buildIntegrityReportSnapshot } from './integrityReport';
-import { runInternalSimilarityAnalysis, saveSimilarityAdjustment } from './similarity';
-import { buildSimilarityViewModel } from './similarityView';
 import { supabase } from './supabase';
 import type { Profile, AppRole } from '../types/auth';
-import type { DocumentListItem, DocumentVersion } from '../types/documents';
 import type {
   AcademicPeriod,
   AnalysisAttempt,
@@ -208,6 +201,7 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
 
   for (const [sourceIndex, source] of (snapshot.internal_similarity?.sources ?? []).entries()) {
     for (const [matchIndex, match] of source.matches.entries()) {
+      const strongEvidence = match.type === 'exact' || match.score >= 70;
       corrections.push({
         id: `internal-${sourceIndex}-${matchIndex}`,
         category: 'similarity',
@@ -215,9 +209,11 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
         source: 'Repositorio institucional',
         reason: match.type === 'exact'
           ? 'El fragmento coincide de forma directa con una fuente del repositorio institucional.'
-          : 'El fragmento presenta una similitud cercana y debe revisarse como posible parafraseo demasiado próximo.',
+          : strongEvidence
+            ? 'El fragmento presenta una similitud cercana con evidencia suficiente y debe revisarse como posible parafraseo demasiado próximo.'
+            : 'El fragmento presenta una similitud cercana para revisión. No se considera por sí sola una prueba de plagio.',
         action: 'Reescribe con elaboración propia y cita la fuente cuando la idea no sea original. Si es una cita textual válida, usa el formato de citación correspondiente.',
-        affectsSimilarity: true,
+        affectsSimilarity: strongEvidence,
       });
     }
   }
@@ -225,19 +221,23 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
   for (const [sourceIndex, source] of (snapshot.external_similarity?.sources ?? []).entries()) {
     const fullText = source.verification_scope === 'full_text';
     for (const [matchIndex, match] of source.matches.entries()) {
+      const strongEvidence = match.type === 'exact' || match.score >= 70;
+      const counts = fullText && strongEvidence;
       corrections.push({
         id: `external-${sourceIndex}-${matchIndex}`,
         category: 'similarity',
         fragment: compact(match.target_excerpt),
         source: source.title || source.provider,
-        reason: fullText
-          ? (match.type === 'exact'
+        reason: !fullText
+          ? 'La fuente solo pudo verificarse parcialmente. Se muestra como referencia para revisión y no aumenta el porcentaje institucional.'
+          : match.type === 'exact'
             ? 'El texto coincide con una fuente externa verificada a texto completo.'
-            : 'Existe una similitud cercana con una fuente externa verificada; puede requerir una mejor paráfrasis o citación.')
-          : 'Se encontró una relación en una fuente disponible solo parcialmente. Se muestra para revisión, pero no se trata como comparación completa.',
+            : strongEvidence
+              ? 'Existe una similitud cercana con evidencia suficiente en una fuente externa verificada; puede requerir una mejor paráfrasis o citación.'
+              : 'Existe una posible paráfrasis o similitud cercana, pero la evidencia todavía es insuficiente para aumentar el porcentaje. Se muestra para revisión.',
         action: 'Contrasta la fuente, reescribe el fragmento con redacción propia y agrega la cita/referencia cuando corresponda.',
         url: source.url,
-        affectsSimilarity: fullText,
+        affectsSimilarity: counts,
       });
     }
   }
@@ -306,43 +306,4 @@ export async function recordAnalysisAttempt(
     attempt_number: Number(row.attempt_number),
     consolidated_similarity: Number(row.consolidated_similarity),
   };
-}
-
-export async function runCompleteAnalysisAttempt(
-  document: DocumentListItem,
-  version: DocumentVersion,
-  onProgress?: (message: string) => void,
-): Promise<CompleteAnalysisResult> {
-  if (version.extraction_status !== 'ready') {
-    throw new Error('El archivo no tiene texto listo para analizar.');
-  }
-
-  onProgress?.('1/4 · Comparando con el repositorio institucional…');
-  const internal = await runInternalSimilarityAnalysis(version);
-  const automaticFilters = {
-    exclude_bibliography: true,
-    exclude_quoted_text: true,
-    min_match_words: 10,
-    excluded_source_ids: [] as string[],
-  };
-  const internalView = buildSimilarityViewModel(version.extracted_text, internal, automaticFilters);
-  await saveSimilarityAdjustment(internal.id, automaticFilters, internalView.adjustedSimilarityPercent, internalView.adjustedMatchedWords);
-
-  onProgress?.('2/4 · Buscando coincidencias en fuentes académicas y web…');
-  await runExternalSimilarityAnalysis(version);
-
-  onProgress?.('3/4 · Revisando citas, referencias y APA 7…');
-  await runCitationIntegrityAnalysis(version);
-
-  onProgress?.('4/4 · Revisando señales de escritura asistida…');
-  await runAiWritingAnalysis(version);
-
-  onProgress?.('Calculando el porcentaje consolidado…');
-  const snapshot = await buildIntegrityReportSnapshot(document, version);
-  const consolidated = snapshot.summary.consolidated_similarity_adjusted;
-  if (consolidated === null) throw new Error('No fue posible calcular la similitud consolidada.');
-
-  const attempt = await recordAnalysisAttempt(version.id, consolidated, snapshot.provenance);
-  onProgress?.('Análisis completado.');
-  return { attempt, snapshot, corrections: buildStudentCorrections(snapshot) };
 }
