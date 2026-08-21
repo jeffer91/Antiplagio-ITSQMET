@@ -27,7 +27,7 @@ export function LoginPage(): React.JSX.Element {
         if (result.requiresEmailConfirmation) {
           setMessage('Cuenta creada. Revisa tu correo para confirmar el registro antes de ingresar.');
         } else {
-          setMessage('Cuenta creada correctamente.');
+          setMessage('Cuenta creada correctamente. El Administrador deberá asignarte periodo, carrera y modalidad.');
         }
       }
     } catch (caught) {
@@ -41,22 +41,20 @@ export function LoginPage(): React.JSX.Element {
     <main className="auth-page">
       <section className="auth-intro">
         <div className="brand brand-light">
-          <div className="brand-mark">SI</div>
+          <div className="brand-mark">PG</div>
           <div>
-            <strong>SIAI</strong>
+            <strong>PlagGuard</strong>
             <span>ITSQMET</span>
           </div>
         </div>
         <div className="auth-copy">
-          <span className="eyebrow">Sistema de Integridad Académica Institucional</span>
-          <h1>Integridad académica con evidencia, no solo porcentajes.</h1>
-          <p>
-            La base para comparar entregas, administrar versiones y construir el futuro informe de similitud del ITSQMET.
-          </p>
+          <span className="eyebrow">Integridad académica institucional</span>
+          <h1>Revisa similitud, fuentes y correcciones en un solo lugar.</h1>
+          <p>PlagGuard acompaña cada versión del trabajo, conserva la trazabilidad y aplica el límite institucional del 20%.</p>
         </div>
         <div className="phase-box">
-          <strong>Fase 1</strong>
-          <span>Autenticación · Roles · Seguridad · Base institucional</span>
+          <strong>PlagGuard · ITSQMET</strong>
+          <span>Repositorio institucional · Fuentes académicas · Web · Citas · APA 7</span>
         </div>
       </section>
 
@@ -64,67 +62,37 @@ export function LoginPage(): React.JSX.Element {
         <form className="auth-card" onSubmit={(event) => void submit(event)}>
           <div className="auth-card-heading">
             <span className="status-badge">Acceso seguro</span>
-            <h2>{mode === 'login' ? 'Ingresar a SIAI' : 'Crear cuenta de estudiante'}</h2>
-            <p>
-              {mode === 'login'
-                ? 'Utiliza tus credenciales para continuar.'
-                : 'Toda cuenta creada desde esta pantalla recibe únicamente el rol Estudiante.'}
-            </p>
+            <h2>{mode === 'login' ? 'Ingresar a PlagGuard' : 'Crear cuenta de estudiante'}</h2>
+            <p>{mode === 'login' ? 'Utiliza tus credenciales para continuar.' : 'Toda cuenta creada desde esta pantalla recibe únicamente el rol Estudiante.'}</p>
           </div>
 
           {mode === 'register' && (
             <label>
               Nombre completo
-              <input
-                autoComplete="name"
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                placeholder="Nombres y apellidos"
-                required
-              />
+              <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Nombres y apellidos" required />
             </label>
           )}
 
           <label>
             Correo electrónico
-            <input
-              autoComplete="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="correo@ejemplo.com"
-              required
-            />
+            <input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@ejemplo.com" required />
           </label>
 
           <label>
             Contraseña
-            <input
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Mínimo 8 caracteres"
-              required
-            />
+            <input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 8 caracteres" required />
           </label>
 
           {error && <div className="alert error-alert">{error}</div>}
           {message && <div className="alert success-alert">{message}</div>}
 
-          <button className="primary-button" disabled={busy} type="submit">
-            {busy ? 'Procesando…' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
-          </button>
+          <button className="primary-button" disabled={busy} type="submit">{busy ? 'Procesando…' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}</button>
 
-          <button
-            className="text-button"
-            type="button"
-            onClick={() => {
-              setMode((current) => (current === 'login' ? 'register' : 'login'));
-              setError(null);
-              setMessage(null);
-            }}
-          >
+          <button className="text-button" type="button" onClick={() => {
+            setMode((current) => (current === 'login' ? 'register' : 'login'));
+            setError(null);
+            setMessage(null);
+          }}>
             {mode === 'login' ? '¿Eres estudiante nuevo? Crear cuenta' : 'Ya tengo una cuenta'}
           </button>
         </form>
