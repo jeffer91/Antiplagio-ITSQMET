@@ -4,7 +4,6 @@ import {
   exportIntegrityReportPdf,
   loadLatestIntegrityReport,
   saveIntegrityReport,
-  setIntegrityReportRelease,
   verifyIntegrityReport,
 } from '../lib/integrityReport';
 import { loadDocumentAttempts } from '../lib/staffWorkflow';
@@ -39,7 +38,6 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
   const [attempt, setAttempt] = useState<AnalysisAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [releaseBusy, setReleaseBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState<'pdf' | 'excel' | null>(null);
   const [observation, setObservation] = useState('');
   const [verified, setVerified] = useState<boolean | null>(null);
@@ -52,7 +50,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     setError(null);
     setVerified(null);
     void Promise.all([
-      loadLatestIntegrityReport(version.id),
+      canRun ? loadLatestIntegrityReport(version.id) : Promise.resolve(null),
       canRun ? loadDocumentAttempts(document.id) : Promise.resolve([] as AnalysisAttempt[]),
     ])
       .then(async ([result, attempts]) => {
@@ -76,7 +74,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
   }, [report]);
 
   const canCreateOfficial = canRun && attempt?.status === 'complies' && version.extraction_status === 'ready';
-  const safeToRelease = verified === true && availableModules === 4;
+  const safeToExport = verified === true && availableModules === 4;
 
   const create = async (): Promise<void> => {
     if (!canCreateOfficial) return;
@@ -95,25 +93,8 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     }
   };
 
-  const toggleRelease = async (): Promise<void> => {
-    if (!report || !safeToRelease) return;
-    setReleaseBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = !report.released_to_student;
-      await setIntegrityReportRelease(report.id, next);
-      setReport({ ...report, released_to_student: next });
-      setMessage(next ? 'Informe oficial liberado al estudiante.' : 'Informe oficial ocultado al estudiante.');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible cambiar la visibilidad del informe.');
-    } finally {
-      setReleaseBusy(false);
-    }
-  };
-
   const exportPdf = async (): Promise<void> => {
-    if (!report || !safeToRelease) return;
+    if (!report || !safeToExport) return;
     setExportBusy('pdf');
     setError(null);
     setMessage(null);
@@ -128,7 +109,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
   };
 
   const exportExcel = async (): Promise<void> => {
-    if (!report || !safeToRelease) return;
+    if (!report || !safeToExport) return;
     setExportBusy('excel');
     setError(null);
     setMessage(null);
@@ -142,7 +123,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     }
   };
 
-  if (!canRun && !report && !loading) return null;
+  if (!canRun) return null;
 
   return (
     <section className="report-panel">
@@ -150,7 +131,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
         <div>
           <span className="eyebrow dark">Informe oficial</span>
           <h3>PlagGuard · Integridad académica</h3>
-          <p>Solo la primera versión que obtiene Cumple puede generar el informe oficial. Cada informe conserva una instantánea inmutable de los cuatro módulos y su huella SHA-256.</p>
+          <p>Solo la versión que obtiene Cumple puede generar el informe oficial. El informe es de uso del Coordinador/Administrador; el estudiante recibe su resultado y correcciones directamente en PlagGuard.</p>
         </div>
         {report && <div className="report-number"><strong>#{report.report_number}</strong><span>{statusLabels[report.final_status]}</span></div>}
       </div>
@@ -159,7 +140,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
       {error && <div className="alert error-alert">{error}</div>}
       {message && <div className="alert report-success">{message}</div>}
 
-      {!loading && !report && canRun && !canCreateOfficial && (
+      {!loading && !report && !canCreateOfficial && (
         <div className="report-empty">
           <strong>Esta versión todavía no puede generar un informe oficial.</strong>
           <p>{attempt ? 'El intento quedó como No cumple. El estudiante debe corregir y subir una nueva versión.' : 'Primero ejecuta el intento completo de PlagGuard para registrar Cumple o No cumple.'}</p>
@@ -210,13 +191,12 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
 
           <div className="report-note">La similitud consolidada utiliza cobertura única de palabras: una coincidencia detectada en más de una fuente se contabiliza una sola vez. Las señales de escritura asistida se muestran por separado y no constituyen por sí solas una acusación de plagio.</div>
 
-          {!safeToRelease && <div className="alert error-alert">El informe no puede exportarse ni liberarse hasta que la huella sea válida y estén presentes los 4 módulos.</div>}
+          {!safeToExport && <div className="alert error-alert">El informe no puede exportarse hasta que la huella sea válida y estén presentes los 4 módulos.</div>}
 
           <div className="report-actions">
-            <button className="secondary-button compact-button" type="button" disabled={exportBusy !== null || !safeToRelease} onClick={() => void exportPdf()}>{exportBusy === 'pdf' ? 'Generando PDF…' : 'Descargar PDF'}</button>
-            <button className="secondary-button compact-button" type="button" disabled={exportBusy !== null || !safeToRelease} onClick={() => void exportExcel()}>{exportBusy === 'excel' ? 'Generando Excel…' : 'Descargar Excel'}</button>
-            {canRun && <button className="secondary-button compact-button" type="button" disabled={releaseBusy || !safeToRelease} onClick={() => void toggleRelease()}>{report.released_to_student ? 'Ocultar al estudiante' : 'Liberar al estudiante'}</button>}
-            <span className={report.released_to_student ? 'release-state released' : 'release-state'}>{report.released_to_student ? 'Visible para el estudiante' : 'Solo coordinador'}</span>
+            <button className="secondary-button compact-button" type="button" disabled={exportBusy !== null || !safeToExport} onClick={() => void exportPdf()}>{exportBusy === 'pdf' ? 'Generando PDF…' : 'Descargar PDF'}</button>
+            <button className="secondary-button compact-button" type="button" disabled={exportBusy !== null || !safeToExport} onClick={() => void exportExcel()}>{exportBusy === 'excel' ? 'Generando Excel…' : 'Descargar Excel'}</button>
+            <span className="release-state">Informe oficial · solo personal autorizado</span>
           </div>
         </>
       )}
