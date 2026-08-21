@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import { MAX_DOCUMENT_SIZE, uploadDocumentVersion } from '../lib/documents';
+import { loadProcessState, loadStudentUploadTargets, type StudentUploadTarget } from '../lib/plagGuard';
 import type { AcademicDocument, UploadProgressStep } from '../types/documents';
 
 interface UploadDocumentModalProps {
@@ -19,11 +21,17 @@ const progressText: Record<UploadProgressStep, string> = {
 };
 
 export function UploadDocumentModal({ open, document, onClose, onUploaded }: UploadDocumentModalProps): React.JSX.Element | null {
+  const { profile } = useAuth();
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<UploadProgressStep | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [targets, setTargets] = useState<StudentUploadTarget[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState('');
+  const [studentContext, setStudentContext] = useState<StudentUploadTarget | null>(null);
+
+  const isStaff = profile?.role === 'coordinator' || profile?.role === 'admin';
 
   useEffect(() => {
     if (!open) return;
@@ -31,13 +39,50 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
     setFile(null);
     setError(null);
     setStep(null);
-  }, [document, open]);
+    setSelectedTarget('');
+    setStudentContext(null);
+
+    if (document) return;
+
+    if (isStaff) {
+      void loadStudentUploadTargets()
+        .then(setTargets)
+        .catch((caught) => setError(caught instanceof Error ? caught.message : 'No fue posible cargar los estudiantes.'));
+      return;
+    }
+
+    if (profile?.role === 'student') {
+      void loadProcessState()
+        .then((state) => {
+          if (!state.configured || !state.period_id || !state.period_name || !state.career || !state.modality) {
+            setError('Tu perfil todavía no tiene periodo, carrera y modalidad asignados. Comunícate con el Administrador.');
+            return;
+          }
+          setStudentContext({
+            studentId: profile.id,
+            fullName: profile.full_name,
+            email: profile.email,
+            periodId: state.period_id,
+            periodName: state.period_name,
+            career: state.career,
+            modality: state.modality,
+          });
+        })
+        .catch((caught) => setError(caught instanceof Error ? caught.message : 'No fue posible validar tu proceso.'));
+    }
+  }, [document, isStaff, open, profile]);
 
   const fileHint = useMemo(() => {
     if (!file) return 'PDF o DOCX · máximo 25 MB';
     const megabytes = file.size / (1024 * 1024);
     return `${file.name} · ${megabytes.toFixed(megabytes >= 10 ? 0 : 1)} MB`;
   }, [file]);
+
+  const activeTarget = useMemo(() => {
+    if (document) return null;
+    if (isStaff) return targets.find((target) => `${target.studentId}|${target.periodId}` === selectedTarget) ?? null;
+    return studentContext;
+  }, [document, isStaff, selectedTarget, studentContext, targets]);
 
   if (!open) return null;
 
@@ -51,6 +96,10 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       setError('El archivo supera el límite de 25 MB.');
       return;
     }
+    if (!document && !activeTarget) {
+      setError(isStaff ? 'Selecciona el estudiante propietario del trabajo.' : 'No existe un proceso académico activo para esta cuenta.');
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -59,6 +108,10 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
         title,
         file,
         documentId: document?.id,
+        ownerId: activeTarget?.studentId,
+        periodId: activeTarget?.periodId,
+        career: activeTarget?.career,
+        modality: activeTarget?.modality,
         onProgress: setStep,
       });
       await onUploaded();
@@ -82,6 +135,27 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
         </div>
 
         <form onSubmit={(event) => void submit(event)}>
+          {!document && isStaff && (
+            <label className="field-label">
+              Estudiante propietario
+              <select value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)} disabled={busy}>
+                <option value="">Seleccionar estudiante…</option>
+                {targets.map((target) => (
+                  <option key={`${target.studentId}-${target.periodId}`} value={`${target.studentId}|${target.periodId}`}>
+                    {target.fullName} · {target.periodName} · {target.career} · {target.modality}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {!document && activeTarget && (
+            <div className="upload-note">
+              <strong>{activeTarget.fullName}</strong>
+              <span>{activeTarget.periodName} · {activeTarget.career} · {activeTarget.modality}</span>
+            </div>
+          )}
+
           <label className="field-label">
             Título del trabajo
             <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={240} disabled={busy || Boolean(document)} placeholder="Título del artículo académico" />
@@ -100,8 +174,8 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
           </label>
 
           <div className="upload-note">
-            <strong>Qué hará SIAI en esta fase</strong>
-            <span>Guardará el original en un bucket privado, calculará SHA-256, extraerá el texto y conservará esta entrega como una versión independiente.</span>
+            <strong>PlagGuard conserva la trazabilidad</strong>
+            <span>El estudiante permanece como propietario aunque la carga la realice un coordinador. El archivo se almacena de forma privada, se calcula SHA-256 y cada corrección queda como una versión independiente.</span>
           </div>
 
           {step && <div className="processing-line"><span className={step === 'done' ? 'tiny-check' : 'mini-spinner'} />{progressText[step]}</div>}
