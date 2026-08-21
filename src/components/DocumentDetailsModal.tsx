@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { runPlagGuardAttempt } from '../lib/completeAnalysis';
 import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents';
-import { runCompleteAnalysisAttempt } from '../lib/plagGuard';
 import { loadDocumentAttempts } from '../lib/staffWorkflow';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
 import type { AnalysisAttempt } from '../types/plagGuard';
@@ -86,7 +86,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
     setMessage(null);
     setProgress('Preparando análisis completo…');
     try {
-      const result = await runCompleteAnalysisAttempt(document, version, setProgress);
+      const result = await runPlagGuardAttempt(document, version, setProgress);
       await refresh(document.id);
       setMessage(`${attemptLabel(result.attempt)} registrado: ${result.attempt.consolidated_similarity.toFixed(1)}% · ${result.attempt.status === 'complies' ? 'Cumple' : 'No cumple'}.`);
     } catch (caught) {
