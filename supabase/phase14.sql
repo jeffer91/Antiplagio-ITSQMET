@@ -4,9 +4,13 @@
 --   * el informe oficial es exclusivo de Coordinador/Administrador;
 --   * el informe queda ligado exactamente al intento Cumple que lo originó;
 --   * se exige trazabilidad válida de los cuatro módulos;
---   * la huella del informe se calcula en el servidor.
+--   * la huella del informe se calcula y verifica en el servidor.
 
 create extension if not exists pgcrypto with schema extensions;
+
+-- Normaliza también la huella de informes históricos sin alterar su snapshot.
+update public.integrity_report_snapshots
+set snapshot_sha256 = encode(digest(convert_to(snapshot::text, 'UTF8'), 'sha256'), 'hex');
 
 -- 1) El informe oficial nunca se publica al estudiante ------------------------
 update public.integrity_report_snapshots
@@ -285,10 +289,10 @@ begin
   if coalesce(p_snapshot#>>'{document,version_id}', '') <> p_target_version_id::text then
     raise exception 'La instantánea no corresponde a la versión aprobada';
   end if;
-  if p_snapshot->'internal_similarity' is null
-     or p_snapshot->'external_similarity' is null
-     or p_snapshot->'citation_integrity' is null
-     or p_snapshot->'ai_writing' is null then
+  if coalesce(jsonb_typeof(p_snapshot->'internal_similarity'), 'null') <> 'object'
+     or coalesce(jsonb_typeof(p_snapshot->'external_similarity'), 'null') <> 'object'
+     or coalesce(jsonb_typeof(p_snapshot->'citation_integrity'), 'null') <> 'object'
+     or coalesce(jsonb_typeof(p_snapshot->'ai_writing'), 'null') <> 'object' then
     raise exception 'El informe oficial requiere los cuatro módulos completos';
   end if;
 
@@ -309,7 +313,7 @@ begin
   end if;
 
   -- La huella oficial se calcula en PostgreSQL; no se confía en una huella enviada por el cliente.
-  v_server_hash := encode(extensions.digest(convert_to(p_snapshot::text, 'UTF8'), 'sha256'), 'hex');
+  v_server_hash := encode(digest(convert_to(p_snapshot::text, 'UTF8'), 'sha256'), 'hex');
 
   perform pg_advisory_xact_lock(hashtextextended(p_target_version_id::text, 0));
   select coalesce(max(r.report_number),0) + 1
@@ -347,7 +351,7 @@ as $$
     from public.integrity_report_snapshots r
     where r.id = p_report_id
       and public.is_coordinator()
-      and r.snapshot_sha256 = encode(extensions.digest(convert_to(r.snapshot::text, 'UTF8'), 'sha256'), 'hex')
+      and r.snapshot_sha256 = encode(digest(convert_to(r.snapshot::text, 'UTF8'), 'sha256'), 'hex')
   );
 $$;
 
