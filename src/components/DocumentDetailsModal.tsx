@@ -88,6 +88,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
     try {
       const result = await runPlagGuardAttempt(document, version, setProgress);
       await refresh(document.id);
+      window.dispatchEvent(new Event('plagguard:notifications-changed'));
       setMessage(`${attemptLabel(result.attempt)} registrado: ${result.attempt.consolidated_similarity.toFixed(1)}% · ${result.attempt.status === 'complies' ? 'Cumple' : 'No cumple'}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible ejecutar el intento completo.');
@@ -147,6 +148,7 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                     )}
                   </div>
                 </div>
+                {canRunAnalysis && !attempt && <div className="report-note">Los cuatro módulos se ejecutan juntos para que el porcentaje y el intento pertenezcan a una sola ejecución.</div>}
                 <SimilarityPanel key={`internal-${version.id}-${refreshKey}`} version={version} canRun={false} />
                 <ExternalSimilarityPanel key={`external-${version.id}-${refreshKey}`} version={version} canRun={false} />
                 <CitationIntegrityPanel key={`citation-${version.id}-${refreshKey}`} version={version} canRun={false} />
