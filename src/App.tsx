@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { CoordinatorDashboard } from './pages/CoordinatorDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
@@ -9,7 +10,7 @@ function LoadingScreen(): React.JSX.Element {
   return (
     <main className="center-page">
       <div className="loader" aria-label="Cargando" />
-      <p>Cargando SIAI…</p>
+      <p>Cargando PlagGuard…</p>
     </main>
   );
 }
@@ -22,7 +23,7 @@ function ProfileProblem(): React.JSX.Element {
         <span className="status-badge warning">Revisión requerida</span>
         <h1>No pudimos validar tu perfil</h1>
         <p>{profileError || 'El perfil de esta cuenta no está disponible.'}</p>
-        <p>Verifica que hayas ejecutado <code>supabase/schema.sql</code> y que el usuario tenga un registro en <code>profiles</code>.</p>
+        <p>Verifica que la base de datos tenga aplicadas las fases de Supabase hasta <code>supabase/phase9.sql</code>.</p>
         <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
       </section>
     </main>
@@ -37,7 +38,9 @@ function AppContent(): React.JSX.Element {
   if (!session) return <LoginPage />;
   if (!profile) return <ProfileProblem />;
 
-  return profile.role === 'coordinator' ? <CoordinatorDashboard /> : <StudentDashboard />;
+  if (profile.role === 'admin') return <AdminDashboard />;
+  if (profile.role === 'coordinator') return <CoordinatorDashboard />;
+  return <StudentDashboard />;
 }
 
 export default function App(): React.JSX.Element {
