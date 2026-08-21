@@ -3,6 +3,9 @@ export type ExtractionStatus = 'ready' | 'needs_ocr' | 'failed';
 export interface AcademicDocument {
   id: string;
   owner_id: string;
+  academic_period_id: string | null;
+  career: string | null;
+  modality: string | null;
   title: string;
   current_version: number;
   status: ExtractionStatus;
@@ -38,6 +41,7 @@ export interface DocumentVersion {
 export interface DocumentListItem extends AcademicDocument {
   owner_name: string;
   owner_email: string;
+  period_name: string;
   latest_version: DocumentVersion | null;
 }
 
