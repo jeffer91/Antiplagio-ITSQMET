@@ -15,6 +15,10 @@ function requireClient() {
   return supabase;
 }
 
+function notifyChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('plagguard:notifications-changed'));
+}
+
 export interface StudentUploadTarget {
   studentId: string;
   fullName: string;
@@ -148,6 +152,7 @@ export async function resolveNotification(id: string): Promise<void> {
   const client = requireClient();
   const { error } = await client.rpc('resolve_notification', { p_notification_id: id });
   if (error) throw error;
+  notifyChanged();
 }
 
 export async function adminCreatePeriod(name: string): Promise<string> {
@@ -161,6 +166,7 @@ export async function adminCreatePeriod(name: string): Promise<string> {
     p_supplementary_open: false,
   });
   if (error) throw error;
+  notifyChanged();
   return String(data ?? '');
 }
 
@@ -173,6 +179,7 @@ export async function adminSetPeriodState(periodId: string, ordinaryOpen: boolea
     p_active: active,
   });
   if (error) throw error;
+  notifyChanged();
 }
 
 export async function adminSetProfileRole(userId: string, role: AppRole): Promise<void> {
@@ -301,6 +308,7 @@ export async function recordAnalysisAttempt(
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error('No fue posible registrar el intento.');
+  notifyChanged();
   return {
     ...(row as AnalysisAttempt),
     attempt_number: Number(row.attempt_number),
