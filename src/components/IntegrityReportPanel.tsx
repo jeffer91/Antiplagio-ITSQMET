@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  exportIntegrityReportExcel,
-  exportIntegrityReportPdf,
   loadLatestIntegrityReport,
   saveIntegrityReport,
 } from '../lib/integrityReport';
+import { exportOfficialReportExcel, exportOfficialReportPdf } from '../lib/officialReportExport';
 import { verifyOfficialReport } from '../lib/reportVerification';
 import { loadDocumentAttempts } from '../lib/staffWorkflow';
 import type { DocumentListItem, DocumentVersion } from '../types/documents';
@@ -99,7 +98,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     setError(null);
     setMessage(null);
     try {
-      const result = await exportIntegrityReportPdf(report);
+      const result = await exportOfficialReportPdf(report);
       if (!result.canceled) setMessage(`PDF guardado${result.filePath ? ` en ${result.filePath}` : ''}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible generar el PDF.');
@@ -114,7 +113,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
     setError(null);
     setMessage(null);
     try {
-      const result = await exportIntegrityReportExcel(report);
+      const result = await exportOfficialReportExcel(report);
       if (!result.canceled) setMessage(`Archivo Excel guardado${result.filePath ? ` en ${result.filePath}` : ''}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible generar el archivo para Excel.');
