@@ -1,8 +1,8 @@
 {
-  "name": "antiplagio-itsqmet",
-  "version": "0.2.0",
+  "name": "plagguard-itsqmet",
+  "version": "1.0.0",
   "private": true,
-  "description": "SIAI - Sistema de Integridad Académica Institucional del ITSQMET",
+  "description": "PlagGuard · ITSQMET - Integridad académica, similitud y trazabilidad institucional",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k -n renderer,electron-ts,electron \"vite\" \"tsc -p tsconfig.electron.json -w --preserveWatchOutput\" \"wait-on http://127.0.0.1:5173 dist-electron/main.js && electron .\"",
