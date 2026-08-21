@@ -11,6 +11,7 @@ import type {
   AcademicPeriod,
   AnalysisAttempt,
   AppNotification,
+  StudentCurrentResult,
   StudentEnrollment,
   StudentProcessState,
 } from '../types/plagGuard';
@@ -62,6 +63,21 @@ export async function loadProcessState(studentId?: string, periodId?: string): P
     complied_similarity: value.complied_similarity === null || value.complied_similarity === undefined
       ? null
       : Number(value.complied_similarity),
+  };
+}
+
+export async function loadStudentCurrentResult(studentId?: string, periodId?: string): Promise<StudentCurrentResult> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('get_student_current_result', {
+    p_student_id: studentId ?? null,
+    p_period_id: periodId ?? null,
+  });
+  if (error) throw error;
+  const value = (data ?? { available: false }) as StudentCurrentResult;
+  return {
+    ...value,
+    attempt_number: value.attempt_number === undefined ? undefined : Number(value.attempt_number),
+    consolidated_similarity: value.consolidated_similarity === undefined ? undefined : Number(value.consolidated_similarity),
   };
 }
 
@@ -207,18 +223,21 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
   }
 
   for (const [sourceIndex, source] of (snapshot.external_similarity?.sources ?? []).entries()) {
+    const fullText = source.verification_scope === 'full_text';
     for (const [matchIndex, match] of source.matches.entries()) {
       corrections.push({
         id: `external-${sourceIndex}-${matchIndex}`,
         category: 'similarity',
         fragment: compact(match.target_excerpt),
         source: source.title || source.provider,
-        reason: match.type === 'exact'
-          ? 'El texto coincide con una fuente externa verificada.'
-          : 'Existe una similitud cercana con una fuente externa; puede requerir una mejor paráfrasis o citación.',
+        reason: fullText
+          ? (match.type === 'exact'
+            ? 'El texto coincide con una fuente externa verificada a texto completo.'
+            : 'Existe una similitud cercana con una fuente externa verificada; puede requerir una mejor paráfrasis o citación.')
+          : 'Se encontró una relación en una fuente disponible solo parcialmente. Se muestra para revisión, pero no se trata como comparación completa.',
         action: 'Contrasta la fuente, reescribe el fragmento con redacción propia y agrega la cita/referencia cuando corresponda.',
         url: source.url,
-        affectsSimilarity: true,
+        affectsSimilarity: fullText,
       });
     }
   }
