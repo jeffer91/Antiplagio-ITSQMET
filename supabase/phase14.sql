@@ -6,11 +6,24 @@
 --   * se exige trazabilidad válida de los cuatro módulos;
 --   * la huella del informe se calcula y verifica en el servidor.
 
+create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
+
+create or replace function public.plagguard_sha256_jsonb(p_value jsonb)
+returns text
+language sql
+immutable
+security definer
+set search_path = public, extensions
+as $$
+  select encode(digest(convert_to(p_value::text, 'UTF8'), 'sha256'), 'hex');
+$$;
+
+revoke all on function public.plagguard_sha256_jsonb(jsonb) from public, authenticated;
 
 -- Normaliza también la huella de informes históricos sin alterar su snapshot.
 update public.integrity_report_snapshots
-set snapshot_sha256 = encode(digest(convert_to(snapshot::text, 'UTF8'), 'sha256'), 'hex');
+set snapshot_sha256 = public.plagguard_sha256_jsonb(snapshot);
 
 -- 1) El informe oficial nunca se publica al estudiante ------------------------
 update public.integrity_report_snapshots
@@ -313,7 +326,7 @@ begin
   end if;
 
   -- La huella oficial se calcula en PostgreSQL; no se confía en una huella enviada por el cliente.
-  v_server_hash := encode(digest(convert_to(p_snapshot::text, 'UTF8'), 'sha256'), 'hex');
+  v_server_hash := public.plagguard_sha256_jsonb(p_snapshot);
 
   perform pg_advisory_xact_lock(hashtextextended(p_target_version_id::text, 0));
   select coalesce(max(r.report_number),0) + 1
@@ -344,14 +357,14 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, extensions
+set search_path = public
 as $$
   select exists(
     select 1
     from public.integrity_report_snapshots r
     where r.id = p_report_id
       and public.is_coordinator()
-      and r.snapshot_sha256 = encode(digest(convert_to(r.snapshot::text, 'UTF8'), 'sha256'), 'hex')
+      and r.snapshot_sha256 = public.plagguard_sha256_jsonb(r.snapshot)
   );
 $$;
 
