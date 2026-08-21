@@ -28,7 +28,11 @@ as $$
       and coalesce(r.snapshot#>>'{provenance,external_analysis_id}', '') = coalesce(a.provenance->>'external_analysis_id','')
       and coalesce(r.snapshot#>>'{provenance,citation_analysis_id}', '') = coalesce(a.provenance->>'citation_analysis_id','')
       and coalesce(r.snapshot#>>'{provenance,ai_analysis_id}', '') = coalesce(a.provenance->>'ai_analysis_id','')
-      and abs(coalesce((r.snapshot#>>'{summary,consolidated_similarity_adjusted}')::numeric, -1) - a.consolidated_similarity) <= 0.01
+      and case
+        when coalesce(r.snapshot#>>'{summary,consolidated_similarity_adjusted}', '') ~ '^\d+(\.\d+)?$'
+        then abs((r.snapshot#>>'{summary,consolidated_similarity_adjusted}')::numeric - a.consolidated_similarity) <= 0.01
+        else false
+      end
       and r.snapshot_sha256 = public.plagguard_sha256_jsonb(r.snapshot)
   );
 $$;
@@ -36,4 +40,4 @@ $$;
 revoke all on function public.verify_integrity_report(uuid) from public;
 grant execute on function public.verify_integrity_report(uuid) to authenticated;
 
-comment on function public.verify_integrity_report is 'Verifica huella, módulos, porcentaje y procedencia contra el intento Cumple antes de exportar un informe oficial.';
+comment on function public.verify_integrity_report is 'Verifica huella, módulos, porcentaje y procedencia contra el intento Cumple antes de exportar un informe oficial; cualquier snapshot inválido falla cerrado.';
