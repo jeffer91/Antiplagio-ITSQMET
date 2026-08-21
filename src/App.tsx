@@ -23,7 +23,7 @@ function ProfileProblem(): React.JSX.Element {
         <span className="status-badge warning">Revisión requerida</span>
         <h1>No pudimos validar tu perfil</h1>
         <p>{profileError || 'El perfil de esta cuenta no está disponible.'}</p>
-        <p>Verifica que la base de datos tenga aplicadas las migraciones de Supabase desde <code>schema.sql</code> hasta <code>phase14.sql</code>, en orden.</p>
+        <p>Verifica que la base de datos tenga aplicadas las migraciones de Supabase desde <code>schema.sql</code> hasta <code>phase15.sql</code>, en orden.</p>
         <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
       </section>
     </main>
