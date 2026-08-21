@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { AppShell } from '../components/AppShell';
 import { UploadDocumentModal } from '../components/UploadDocumentModal';
+import { runPlagGuardAttempt } from '../lib/completeAnalysis';
 import { loadDocuments, loadDocumentVersions } from '../lib/documents';
 import { buildIntegrityReportSnapshot } from '../lib/integrityReport';
 import {
   buildStudentCorrections,
   loadProcessState,
   loadStudentCurrentResult,
-  runCompleteAnalysisAttempt,
   type StudentCorrection,
 } from '../lib/plagGuard';
-import type { DocumentListItem, DocumentVersion } from '../types/documents';
+import type { DocumentListItem } from '../types/documents';
 import type { StudentCurrentResult, StudentProcessState } from '../types/plagGuard';
 
 function processLabel(state: StudentProcessState | null): string {
@@ -126,7 +126,7 @@ export function StudentDashboard(): React.JSX.Element {
     setError(null);
     setAnalysisProgress('Preparando análisis…');
     try {
-      const result = await runCompleteAnalysisAttempt(activeDocument, latestVersion, setAnalysisProgress);
+      const result = await runPlagGuardAttempt(activeDocument, latestVersion, setAnalysisProgress);
       setCorrections(result.corrections);
       await refresh();
     } catch (caught) {
