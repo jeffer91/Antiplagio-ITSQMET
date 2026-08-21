@@ -1,10 +1,11 @@
 -- PlagGuard · ITSQMET - Fase 14
 -- Ejecutar DESPUÉS de supabase/phase13.sql.
 -- Cierre de producción:
---   * el informe oficial es exclusivo de Coordinador/Administrador;
---   * el informe queda ligado exactamente al intento Cumple que lo originó;
---   * se exige trazabilidad válida de los cuatro módulos;
---   * la huella del informe se calcula y verifica en el servidor.
+--   * informe oficial exclusivo de Coordinador/Administrador;
+--   * informe ligado exactamente al intento Cumple que lo originó;
+--   * trazabilidad obligatoria de los cuatro módulos;
+--   * huella del informe calculada y verificada en servidor;
+--   * alertas de Supletorio ligadas al periodo y al estudiante.
 
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
@@ -21,11 +22,88 @@ $$;
 
 revoke all on function public.plagguard_sha256_jsonb(jsonb) from public, authenticated;
 
--- Normaliza también la huella de informes históricos sin alterar su snapshot.
+-- 1) Alertas con contexto ------------------------------------------------------
+alter table public.notifications
+  add column if not exists period_id uuid references public.academic_periods(id) on delete cascade;
+alter table public.notifications
+  add column if not exists subject_student_id uuid references public.profiles(id) on delete cascade;
+
+create index if not exists notifications_period_kind_idx
+  on public.notifications(period_id, kind, resolved);
+create index if not exists notifications_subject_idx
+  on public.notifications(subject_student_id, created_at desc);
+
+-- Recupera contexto posible de alertas antiguas del propio estudiante.
+update public.notifications n
+set subject_student_id = n.user_id,
+    period_id = coalesce(n.period_id, (
+      select a.period_id
+      from public.analysis_attempts a
+      where a.student_id = n.user_id
+      order by a.created_at desc
+      limit 1
+    ))
+where n.subject_student_id is null
+  and exists (
+    select 1 from public.profiles p
+    where p.id = n.user_id and p.role = 'student'::public.app_role
+  );
+
+-- Las alertas antiguas de personal no tenían estudiante/periodo identificable.
+-- Se cierran para evitar banners huérfanos; los nuevos eventos quedan contextualizados.
+update public.notifications n
+set resolved = true,
+    resolved_at = coalesce(n.resolved_at, now())
+where n.kind = 'supplementary_required'
+  and n.period_id is null
+  and exists (
+    select 1 from public.profiles p
+    where p.id = n.user_id and p.role in ('coordinator'::public.app_role, 'admin'::public.app_role)
+  );
+
+-- Al abrir Supletorio se resuelven automáticamente las alertas de ese periodo.
+create or replace function public.admin_set_period_state(
+  p_period_id uuid,
+  p_ordinary_open boolean,
+  p_supplementary_open boolean,
+  p_active boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or not public.is_admin() then
+    raise exception 'Solo el Administrador puede modificar periodos';
+  end if;
+
+  update public.academic_periods
+  set ordinary_open = coalesce(p_ordinary_open, ordinary_open),
+      supplementary_open = coalesce(p_supplementary_open, supplementary_open),
+      active = coalesce(p_active, active),
+      updated_at = now()
+  where id = p_period_id;
+  if not found then raise exception 'Periodo no encontrado'; end if;
+
+  if coalesce(p_supplementary_open, false) then
+    update public.notifications
+    set resolved = true, resolved_at = now()
+    where period_id = p_period_id
+      and kind = 'supplementary_required'
+      and not resolved;
+  end if;
+end;
+$$;
+
+revoke all on function public.admin_set_period_state(uuid,boolean,boolean,boolean) from public;
+grant execute on function public.admin_set_period_state(uuid,boolean,boolean,boolean) to authenticated;
+
+-- 2) Normaliza huellas históricas ---------------------------------------------
 update public.integrity_report_snapshots
 set snapshot_sha256 = public.plagguard_sha256_jsonb(snapshot);
 
--- 1) El informe oficial nunca se publica al estudiante ------------------------
+-- 3) El informe oficial nunca se publica al estudiante ------------------------
 update public.integrity_report_snapshots
 set released_to_student = false
 where released_to_student;
@@ -67,7 +145,7 @@ $$;
 revoke all on function public.set_integrity_report_release(uuid,boolean) from public;
 grant execute on function public.set_integrity_report_release(uuid,boolean) to authenticated;
 
--- 2) Intentos: los cuatro análisis deben pertenecer a la misma versión --------
+-- 4) Intentos: los cuatro análisis deben pertenecer a la misma versión --------
 create or replace function public.record_analysis_attempt(
   p_target_version_id uuid,
   p_consolidated_similarity numeric,
@@ -223,22 +301,38 @@ begin
           excluded_by = null,
           exclusion_reason = null;
 
-    insert into public.notifications(user_id, kind, title, message)
-    values (v_document.owner_id, 'process_completed', 'Cumple', 'Tu trabajo cumple el límite institucional de similitud y el proceso quedó cerrado.');
+    insert into public.notifications(user_id, kind, title, message, period_id, subject_student_id)
+    values (
+      v_document.owner_id, 'process_completed', 'Cumple',
+      'Tu trabajo cumple el límite institucional de similitud y el proceso quedó cerrado.',
+      v_period.id, v_document.owner_id
+    );
   elsif v_process = 'ordinary'::public.attempt_process and v_attempt_number >= v_period.ordinary_attempts then
-    insert into public.notifications(user_id, kind, title, message)
-    values (v_document.owner_id, 'supplementary_required', 'Pasa a Supletorio', 'Agotaste los intentos Ordinarios. El Administrador debe abrir el Supletorio para habilitar tres intentos adicionales.');
+    insert into public.notifications(user_id, kind, title, message, period_id, subject_student_id)
+    values (
+      v_document.owner_id, 'supplementary_required', 'Pasa a Supletorio',
+      'Agotaste los intentos Ordinarios. El Administrador debe abrir el Supletorio para habilitar tres intentos adicionales.',
+      v_period.id, v_document.owner_id
+    );
 
     for v_staff in
       select id from public.profiles
       where role in ('coordinator'::public.app_role, 'admin'::public.app_role)
     loop
-      insert into public.notifications(user_id, kind, title, message)
-      values (v_staff.id, 'supplementary_required', 'Estudiante pasa a Supletorio', 'Un estudiante agotó los intentos Ordinarios sin cumplir el límite de similitud.');
+      insert into public.notifications(user_id, kind, title, message, period_id, subject_student_id)
+      values (
+        v_staff.id, 'supplementary_required', 'Estudiante pasa a Supletorio',
+        'Un estudiante agotó los intentos Ordinarios sin cumplir el límite de similitud.',
+        v_period.id, v_document.owner_id
+      );
     end loop;
   elsif v_process = 'supplementary'::public.attempt_process and v_attempt_number >= v_period.supplementary_attempts then
-    insert into public.notifications(user_id, kind, title, message)
-    values (v_document.owner_id, 'attempts_exhausted', 'Intentos agotados', 'Agotaste los intentos de Supletorio sin cumplir el límite institucional.');
+    insert into public.notifications(user_id, kind, title, message, period_id, subject_student_id)
+    values (
+      v_document.owner_id, 'attempts_exhausted', 'Intentos agotados',
+      'Agotaste los intentos de Supletorio sin cumplir el límite institucional.',
+      v_period.id, v_document.owner_id
+    );
   end if;
 
   return next v_row;
@@ -248,7 +342,7 @@ $$;
 revoke all on function public.record_analysis_attempt(uuid,numeric,text,jsonb) from public;
 grant execute on function public.record_analysis_attempt(uuid,numeric,text,jsonb) to authenticated;
 
--- 3) Informe oficial: debe reproducir exactamente el intento Cumple ------------
+-- 5) Informe oficial: debe reproducir exactamente el intento Cumple ------------
 create or replace function public.save_integrity_report_snapshot(
   p_target_version_id uuid,
   p_report_schema_version text,
@@ -325,7 +419,6 @@ begin
     raise exception 'La similitud del informe no coincide con el intento Cumple';
   end if;
 
-  -- La huella oficial se calcula en PostgreSQL; no se confía en una huella enviada por el cliente.
   v_server_hash := public.plagguard_sha256_jsonb(p_snapshot);
 
   perform pg_advisory_xact_lock(hashtextextended(p_target_version_id::text, 0));
@@ -351,7 +444,7 @@ $$;
 revoke all on function public.save_integrity_report_snapshot(uuid,text,text,text,jsonb,text) from public;
 grant execute on function public.save_integrity_report_snapshot(uuid,text,text,text,jsonb,text) to authenticated;
 
--- 4) Verificación de huella en servidor ---------------------------------------
+-- 6) Verificación de huella en servidor ---------------------------------------
 create or replace function public.verify_integrity_report(p_report_id uuid)
 returns boolean
 language sql
