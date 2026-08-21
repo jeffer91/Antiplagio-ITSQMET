@@ -1,0 +1,329 @@
+import { runAiWritingAnalysis } from './aiWriting';
+import { runCitationIntegrityAnalysis } from './citationIntegrity';
+import { runExternalSimilarityAnalysis } from './externalSimilarity';
+import { buildIntegrityReportSnapshot } from './integrityReport';
+import { runInternalSimilarityAnalysis, saveSimilarityAdjustment } from './similarity';
+import { buildSimilarityViewModel } from './similarityView';
+import { supabase } from './supabase';
+import type { Profile, AppRole } from '../types/auth';
+import type { DocumentListItem, DocumentVersion } from '../types/documents';
+import type {
+  AcademicPeriod,
+  AnalysisAttempt,
+  AppNotification,
+  StudentEnrollment,
+  StudentProcessState,
+} from '../types/plagGuard';
+import type { IntegrityReportSnapshot } from '../types/integrityReport';
+
+function requireClient() {
+  if (!supabase) throw new Error('Supabase no está configurado.');
+  return supabase;
+}
+
+export interface StudentUploadTarget {
+  studentId: string;
+  fullName: string;
+  email: string;
+  periodId: string;
+  periodName: string;
+  career: string;
+  modality: string;
+}
+
+export interface StudentCorrection {
+  id: string;
+  category: 'similarity' | 'citation' | 'apa' | 'assisted_writing';
+  fragment: string;
+  source: string;
+  reason: string;
+  action: string;
+  url?: string | null;
+  affectsSimilarity: boolean;
+}
+
+export interface CompleteAnalysisResult {
+  attempt: AnalysisAttempt;
+  snapshot: IntegrityReportSnapshot;
+  corrections: StudentCorrection[];
+}
+
+export async function loadProcessState(studentId?: string, periodId?: string): Promise<StudentProcessState> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('get_student_process_state', {
+    p_student_id: studentId ?? null,
+    p_period_id: periodId ?? null,
+  });
+  if (error) throw error;
+  const value = (data ?? { configured: false, student_id: studentId ?? '' }) as StudentProcessState;
+  return {
+    ...value,
+    similarity_limit: value.similarity_limit === undefined ? undefined : Number(value.similarity_limit),
+    complied_similarity: value.complied_similarity === null || value.complied_similarity === undefined
+      ? null
+      : Number(value.complied_similarity),
+  };
+}
+
+export async function loadPeriods(): Promise<AcademicPeriod[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('academic_periods')
+    .select('id,name,similarity_limit,ordinary_attempts,supplementary_attempts,ordinary_open,supplementary_open,active,created_at,updated_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...(row as AcademicPeriod),
+    similarity_limit: Number(row.similarity_limit),
+    ordinary_attempts: Number(row.ordinary_attempts),
+    supplementary_attempts: Number(row.supplementary_attempts),
+  }));
+}
+
+export async function loadProfiles(): Promise<Profile[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('profiles')
+    .select('id,email,full_name,role,created_at')
+    .order('full_name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+export async function loadEnrollments(): Promise<StudentEnrollment[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('student_enrollments')
+    .select('id,student_id,period_id,career,modality,active,created_at,updated_at')
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as StudentEnrollment[];
+}
+
+export async function loadStudentUploadTargets(): Promise<StudentUploadTarget[]> {
+  const [profiles, periods, enrollments] = await Promise.all([loadProfiles(), loadPeriods(), loadEnrollments()]);
+  const profileMap = new Map(profiles.filter((profile) => profile.role === 'student').map((profile) => [profile.id, profile]));
+  const periodMap = new Map(periods.map((period) => [period.id, period]));
+  return enrollments
+    .filter((enrollment) => enrollment.active)
+    .map((enrollment) => {
+      const profile = profileMap.get(enrollment.student_id);
+      const period = periodMap.get(enrollment.period_id);
+      if (!profile || !period) return null;
+      return {
+        studentId: profile.id,
+        fullName: profile.full_name || profile.email,
+        email: profile.email,
+        periodId: period.id,
+        periodName: period.name,
+        career: enrollment.career,
+        modality: enrollment.modality,
+      } satisfies StudentUploadTarget;
+    })
+    .filter((value): value is StudentUploadTarget => Boolean(value))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'es'));
+}
+
+export async function loadNotifications(): Promise<AppNotification[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('notifications')
+    .select('id,user_id,kind,title,message,resolved,created_at,resolved_at')
+    .eq('resolved', false)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as AppNotification[];
+}
+
+export async function resolveNotification(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('resolve_notification', { p_notification_id: id });
+  if (error) throw error;
+}
+
+export async function adminCreatePeriod(name: string): Promise<string> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('admin_create_period', {
+    p_name: name,
+    p_similarity_limit: 20,
+    p_ordinary_attempts: 3,
+    p_supplementary_attempts: 3,
+    p_ordinary_open: true,
+    p_supplementary_open: false,
+  });
+  if (error) throw error;
+  return String(data ?? '');
+}
+
+export async function adminSetPeriodState(periodId: string, ordinaryOpen: boolean, supplementaryOpen: boolean, active: boolean): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('admin_set_period_state', {
+    p_period_id: periodId,
+    p_ordinary_open: ordinaryOpen,
+    p_supplementary_open: supplementaryOpen,
+    p_active: active,
+  });
+  if (error) throw error;
+}
+
+export async function adminSetProfileRole(userId: string, role: AppRole): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('admin_set_profile_role', { p_user_id: userId, p_role: role });
+  if (error) throw error;
+}
+
+export async function adminAssignStudent(studentId: string, periodId: string, career: string, modality: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('admin_assign_student', {
+    p_student_id: studentId,
+    p_period_id: periodId,
+    p_career: career,
+    p_modality: modality,
+  });
+  if (error) throw error;
+}
+
+function compact(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 650);
+}
+
+export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): StudentCorrection[] {
+  const corrections: StudentCorrection[] = [];
+
+  for (const [sourceIndex, source] of (snapshot.internal_similarity?.sources ?? []).entries()) {
+    for (const [matchIndex, match] of source.matches.entries()) {
+      corrections.push({
+        id: `internal-${sourceIndex}-${matchIndex}`,
+        category: 'similarity',
+        fragment: compact(match.target_excerpt),
+        source: 'Repositorio institucional',
+        reason: match.type === 'exact'
+          ? 'El fragmento coincide de forma directa con una fuente del repositorio institucional.'
+          : 'El fragmento presenta una similitud cercana y debe revisarse como posible parafraseo demasiado próximo.',
+        action: 'Reescribe con elaboración propia y cita la fuente cuando la idea no sea original. Si es una cita textual válida, usa el formato de citación correspondiente.',
+        affectsSimilarity: true,
+      });
+    }
+  }
+
+  for (const [sourceIndex, source] of (snapshot.external_similarity?.sources ?? []).entries()) {
+    for (const [matchIndex, match] of source.matches.entries()) {
+      corrections.push({
+        id: `external-${sourceIndex}-${matchIndex}`,
+        category: 'similarity',
+        fragment: compact(match.target_excerpt),
+        source: source.title || source.provider,
+        reason: match.type === 'exact'
+          ? 'El texto coincide con una fuente externa verificada.'
+          : 'Existe una similitud cercana con una fuente externa; puede requerir una mejor paráfrasis o citación.',
+        action: 'Contrasta la fuente, reescribe el fragmento con redacción propia y agrega la cita/referencia cuando corresponda.',
+        url: source.url,
+        affectsSimilarity: true,
+      });
+    }
+  }
+
+  const citation = snapshot.citation_integrity;
+  if (citation) {
+    citation.unlinked_citations.forEach((raw, index) => {
+      corrections.push({
+        id: `citation-${index}`,
+        category: 'citation',
+        fragment: compact(raw),
+        source: 'Citas y referencias',
+        reason: 'La cita no pudo vincularse claramente con una referencia bibliográfica.',
+        action: 'Verifica autor y año, y agrega o corrige la referencia completa en la bibliografía.',
+        affectsSimilarity: false,
+      });
+    });
+
+    citation.references.forEach((reference) => {
+      if (reference.apa_issues.length === 0) return;
+      corrections.push({
+        id: `apa-${reference.ordinal}`,
+        category: 'apa',
+        fragment: compact(reference.raw_reference),
+        source: 'APA 7',
+        reason: reference.apa_issues.join(' · '),
+        action: 'Corrige la referencia siguiendo APA 7 y vuelve a comprobar los datos bibliográficos.',
+        affectsSimilarity: false,
+      });
+    });
+  }
+
+  for (const segment of snapshot.ai_writing?.segments ?? []) {
+    corrections.push({
+      id: `assisted-${segment.segment_index}`,
+      category: 'assisted_writing',
+      fragment: compact(segment.excerpt),
+      source: 'Señales de escritura asistida',
+      reason: 'El fragmento presenta señales estilométricas que merecen revisión humana; esto no demuestra por sí solo uso de IA ni plagio.',
+      action: 'Revisa la redacción, asegúrate de comprender y poder sustentar el contenido, y conserva evidencia de autoría cuando sea necesario.',
+      affectsSimilarity: false,
+    });
+  }
+
+  return corrections.slice(0, 80);
+}
+
+export async function recordAnalysisAttempt(
+  versionId: string,
+  consolidatedSimilarity: number,
+  provenance: Record<string, unknown>,
+  observation = '',
+): Promise<AnalysisAttempt> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('record_analysis_attempt', {
+    p_target_version_id: versionId,
+    p_consolidated_similarity: consolidatedSimilarity,
+    p_observation: observation,
+    p_provenance: provenance,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('No fue posible registrar el intento.');
+  return {
+    ...(row as AnalysisAttempt),
+    attempt_number: Number(row.attempt_number),
+    consolidated_similarity: Number(row.consolidated_similarity),
+  };
+}
+
+export async function runCompleteAnalysisAttempt(
+  document: DocumentListItem,
+  version: DocumentVersion,
+  onProgress?: (message: string) => void,
+): Promise<CompleteAnalysisResult> {
+  if (version.extraction_status !== 'ready') {
+    throw new Error('El archivo no tiene texto listo para analizar.');
+  }
+
+  onProgress?.('1/4 · Comparando con el repositorio institucional…');
+  const internal = await runInternalSimilarityAnalysis(version);
+  const automaticFilters = {
+    exclude_bibliography: true,
+    exclude_quoted_text: true,
+    min_match_words: 10,
+    excluded_source_ids: [] as string[],
+  };
+  const internalView = buildSimilarityViewModel(version.extracted_text, internal, automaticFilters);
+  await saveSimilarityAdjustment(internal.id, automaticFilters, internalView.adjustedSimilarityPercent, internalView.adjustedMatchedWords);
+
+  onProgress?.('2/4 · Buscando coincidencias en fuentes académicas y web…');
+  await runExternalSimilarityAnalysis(version);
+
+  onProgress?.('3/4 · Revisando citas, referencias y APA 7…');
+  await runCitationIntegrityAnalysis(version);
+
+  onProgress?.('4/4 · Revisando señales de escritura asistida…');
+  await runAiWritingAnalysis(version);
+
+  onProgress?.('Calculando el porcentaje consolidado…');
+  const snapshot = await buildIntegrityReportSnapshot(document, version);
+  const consolidated = snapshot.summary.consolidated_similarity_adjusted;
+  if (consolidated === null) throw new Error('No fue posible calcular la similitud consolidada.');
+
+  const attempt = await recordAnalysisAttempt(version.id, consolidated, snapshot.provenance);
+  onProgress?.('Análisis completado.');
+  return { attempt, snapshot, corrections: buildStudentCorrections(snapshot) };
+}
