@@ -20,17 +20,17 @@ function registerExportHandlers(): void {
   ipcMain.handle('siai:save-pdf', async (_event, payload: unknown) => {
     const row = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const html = typeof row.html === 'string' ? row.html : '';
-    const defaultFileName = safeFileName(typeof row.defaultFileName === 'string' ? row.defaultFileName : '', 'informe-siai.pdf');
+    const defaultFileName = safeFileName(typeof row.defaultFileName === 'string' ? row.defaultFileName : '', 'informe-plagguard.pdf');
     if (!html || html.length > MAX_REPORT_HTML_CHARS) throw new Error('El contenido del informe PDF es inválido o demasiado grande.');
 
     const result = await dialog.showSaveDialog({
-      title: 'Guardar informe SIAI en PDF',
+      title: 'Guardar informe PlagGuard en PDF',
       defaultPath: defaultFileName.toLowerCase().endsWith('.pdf') ? defaultFileName : `${defaultFileName}.pdf`,
       filters: [{ name: 'Documento PDF', extensions: ['pdf'] }],
     });
     if (result.canceled || !result.filePath) return { canceled: true, filePath: null };
 
-    const tempPath = path.join(app.getPath('temp'), `siai-report-${randomUUID()}.html`);
+    const tempPath = path.join(app.getPath('temp'), `plagguard-report-${randomUUID()}.html`);
     const printWindow = new BrowserWindow({
       show: false,
       webPreferences: {
@@ -65,11 +65,11 @@ function registerExportHandlers(): void {
   ipcMain.handle('siai:save-excel', async (_event, payload: unknown) => {
     const row = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const content = typeof row.content === 'string' ? row.content : '';
-    const defaultFileName = safeFileName(typeof row.defaultFileName === 'string' ? row.defaultFileName : '', 'informe-siai.xls');
+    const defaultFileName = safeFileName(typeof row.defaultFileName === 'string' ? row.defaultFileName : '', 'informe-plagguard.xls');
     if (!content || content.length > MAX_SPREADSHEET_CHARS) throw new Error('El contenido del informe Excel es inválido o demasiado grande.');
 
     const result = await dialog.showSaveDialog({
-      title: 'Guardar informe SIAI para Excel',
+      title: 'Guardar informe PlagGuard para Excel',
       defaultPath: defaultFileName.toLowerCase().endsWith('.xls') ? defaultFileName : `${defaultFileName}.xls`,
       filters: [{ name: 'Microsoft Excel 2003 XML', extensions: ['xls'] }],
     });
@@ -88,7 +88,7 @@ async function createWindow(): Promise<void> {
     minHeight: 700,
     show: false,
     backgroundColor: '#f4f7fb',
-    title: 'SIAI - ITSQMET',
+    title: 'PlagGuard · ITSQMET',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
