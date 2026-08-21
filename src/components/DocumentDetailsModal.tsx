@@ -53,13 +53,18 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
     }
   };
 
-  const canRunAnalysis = profile?.role === 'coordinator';
+  const canRunAnalysis = profile?.role === 'coordinator' || profile?.role === 'admin';
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card details-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-heading">
-          <div><span className="eyebrow dark">Historial de versiones</span><h2>{document.title}</h2><p>{document.owner_name} · {document.owner_email}</p></div>
+          <div>
+            <span className="eyebrow dark">PlagGuard · Historial de versiones</span>
+            <h2>{document.title}</h2>
+            <p>{document.owner_name} · {document.owner_email}</p>
+            <p>{document.period_name} · {document.career || 'Carrera sin registrar'} · {document.modality || 'Modalidad sin registrar'}</p>
+          </div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
 
