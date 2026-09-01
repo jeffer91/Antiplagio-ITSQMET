@@ -10,17 +10,13 @@ import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Profile } from '../types/auth';
 
-interface SignUpResult {
-  requiresEmailConfirmation: boolean;
-}
-
 interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
   profileError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (fullName: string, email: string, password: string) => Promise<SignUpResult>;
+  signInStudent: (cedula: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -52,7 +48,7 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
       const { data, error } = await client
         .from('profiles')
-        .select('id,email,full_name,role,created_at')
+        .select('id,email,full_name,role,cedula,created_at')
         .eq('id', currentSession.user.id)
         .maybeSingle();
 
@@ -66,7 +62,7 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
       if (!data) {
         setProfile(null);
-        setProfileError('La cuenta existe, pero todavía no tiene un perfil SIAI asociado.');
+        setProfileError('La cuenta existe, pero todavía no tiene un perfil PlagGuard asociado.');
         return;
       }
 
@@ -116,17 +112,30 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
-      signUp: async (fullName, email, password) => {
+      signInStudent: async (cedula) => {
         if (!supabase) throw new Error('Supabase no está configurado.');
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName.trim() },
-          },
+
+        const cleanCedula = cedula.replace(/\D/g, '');
+        if (!/^\d{10}$/.test(cleanCedula)) {
+          throw new Error('Ingresa una cédula válida de 10 dígitos.');
+        }
+
+        const { data, error } = await supabase.functions.invoke('student-cedula-login', {
+          body: { cedula: cleanCedula },
         });
-        if (error) throw error;
-        return { requiresEmailConfirmation: !data.session };
+
+        if (error) {
+          throw new Error((data as { error?: string } | null)?.error || 'La cédula no está habilitada para ingresar.');
+        }
+
+        const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
+        if (!tokenHash) throw new Error('No fue posible iniciar la sesión.');
+
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'magiclink',
+        });
+        if (verifyError) throw verifyError;
       },
       signOut: async () => {
         if (!supabase) return;

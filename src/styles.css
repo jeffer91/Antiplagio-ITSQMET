@@ -166,3 +166,70 @@ code { padding: 2px 6px; border-radius: 6px; background: #edf1f7; font-size: .9e
   .content-grid { grid-template-columns: 1fr; }
   .phase-banner { flex-direction: column; }
 }
+
+
+/* Acceso simplificado: estudiante por cédula */
+.student-login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(24, 166, 106, .09), transparent 34%),
+    #f5f8fc;
+}
+.student-login-card {
+  width: min(100%, 420px);
+  padding: 38px;
+  border: 1px solid #e1e7ef;
+  border-radius: 24px;
+  background: white;
+  box-shadow: 0 24px 70px rgba(30, 46, 70, .09);
+}
+.student-login-brand {
+  justify-content: center;
+  margin-bottom: 30px;
+}
+.student-login-heading {
+  text-align: center;
+}
+.student-login-heading h1 {
+  margin: 13px 0 8px;
+  font-size: 30px;
+  letter-spacing: -.035em;
+}
+.student-login-heading p {
+  margin: 0 0 26px;
+  color: #718096;
+  line-height: 1.5;
+}
+.student-login-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  color: #39465a;
+  font-size: 13px;
+  font-weight: 800;
+}
+.student-login-field input {
+  width: 100%;
+  padding: 14px 15px;
+  border: 1px solid #d7dee9;
+  border-radius: 11px;
+  outline: none;
+  color: #172033;
+  background: #fbfcfe;
+  transition: border .15s, box-shadow .15s;
+}
+.student-login-field input:focus {
+  border-color: #24966c;
+  box-shadow: 0 0 0 3px rgba(36,150,108,.12);
+}
+.student-access-switch {
+  margin-bottom: -8px;
+}
+@media (max-width: 520px) {
+  .student-login-page { padding: 16px; }
+  .student-login-card { padding: 30px 22px; border-radius: 20px; }
+  .student-login-heading h1 { font-size: 26px; }
+}

@@ -2,101 +2,113 @@ import { type FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
 export function LoginPage(): React.JSX.Element {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [fullName, setFullName] = useState('');
+  const { signIn, signInStudent } = useAuth();
+  const [mode, setMode] = useState<'student' | 'staff'>('student');
+  const [cedula, setCedula] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setBusy(true);
-    setMessage(null);
     setError(null);
 
     try {
-      if (mode === 'login') {
-        await signIn(email.trim(), password);
-      } else {
-        if (fullName.trim().length < 3) throw new Error('Ingresa tu nombre completo.');
-        if (password.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
-        const result = await signUp(fullName, email.trim(), password);
-        if (result.requiresEmailConfirmation) {
-          setMessage('Cuenta creada. Revisa tu correo para confirmar el registro antes de ingresar.');
-        } else {
-          setMessage('Cuenta creada correctamente. El Administrador deberá asignarte periodo, carrera y modalidad.');
+      if (mode === 'student') {
+        const cleanCedula = cedula.replace(/\D/g, '');
+        if (!/^\d{10}$/.test(cleanCedula)) {
+          throw new Error('Ingresa una cédula válida de 10 dígitos.');
         }
+        await signInStudent(cleanCedula);
+      } else {
+        if (!email.trim() || !password) throw new Error('Completa correo y contraseña.');
+        await signIn(email.trim(), password);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Ocurrió un error inesperado.');
+      setError(caught instanceof Error ? caught.message : 'No fue posible ingresar.');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <main className="auth-page">
-      <section className="auth-intro">
-        <div className="brand brand-light">
+    <main className="student-login-page">
+      <form className="student-login-card" onSubmit={(event) => void submit(event)}>
+        <div className="brand student-login-brand">
           <div className="brand-mark">PG</div>
           <div>
             <strong>PlagGuard</strong>
             <span>ITSQMET</span>
           </div>
         </div>
-        <div className="auth-copy">
-          <span className="eyebrow">Integridad académica institucional</span>
-          <h1>Revisa similitud, fuentes y correcciones en un solo lugar.</h1>
-          <p>PlagGuard acompaña cada versión del trabajo, conserva la trazabilidad y aplica el límite institucional del 20%.</p>
-        </div>
-        <div className="phase-box">
-          <strong>PlagGuard · ITSQMET</strong>
-          <span>Repositorio institucional · Fuentes académicas · Web · Citas · APA 7</span>
-        </div>
-      </section>
 
-      <section className="auth-panel">
-        <form className="auth-card" onSubmit={(event) => void submit(event)}>
-          <div className="auth-card-heading">
-            <span className="status-badge">Acceso seguro</span>
-            <h2>{mode === 'login' ? 'Ingresar a PlagGuard' : 'Crear cuenta de estudiante'}</h2>
-            <p>{mode === 'login' ? 'Utiliza tus credenciales para continuar.' : 'Toda cuenta creada desde esta pantalla recibe únicamente el rol Estudiante.'}</p>
-          </div>
+        <div className="student-login-heading">
+          <span className="status-badge">{mode === 'student' ? 'Estudiantes' : 'Acceso institucional'}</span>
+          <h1>{mode === 'student' ? 'Ingresa con tu cédula' : 'Acceso institucional'}</h1>
+          <p>{mode === 'student' ? 'Escribe únicamente tu número de cédula.' : 'Coordinadores y administradores.'}</p>
+        </div>
 
-          {mode === 'register' && (
-            <label>
-              Nombre completo
-              <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Nombres y apellidos" required />
+        {mode === 'student' ? (
+          <label className="student-login-field">
+            Cédula
+            <input
+              autoFocus
+              autoComplete="username"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={10}
+              value={cedula}
+              onChange={(event) => setCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="Ej. 1712345678"
+              required
+            />
+          </label>
+        ) : (
+          <>
+            <label className="student-login-field">
+              Correo electrónico
+              <input
+                autoComplete="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="correo@institucion.edu.ec"
+                required
+              />
             </label>
-          )}
+            <label className="student-login-field">
+              Contraseña
+              <input
+                autoComplete="current-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Contraseña"
+                required
+              />
+            </label>
+          </>
+        )}
 
-          <label>
-            Correo electrónico
-            <input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@ejemplo.com" required />
-          </label>
+        {error && <div className="alert error-alert">{error}</div>}
 
-          <label>
-            Contraseña
-            <input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 8 caracteres" required />
-          </label>
+        <button className="primary-button" disabled={busy} type="submit">
+          {busy ? 'Ingresando…' : 'Ingresar'}
+        </button>
 
-          {error && <div className="alert error-alert">{error}</div>}
-          {message && <div className="alert success-alert">{message}</div>}
-
-          <button className="primary-button" disabled={busy} type="submit">{busy ? 'Procesando…' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}</button>
-
-          <button className="text-button" type="button" onClick={() => {
-            setMode((current) => (current === 'login' ? 'register' : 'login'));
+        <button
+          className="text-button student-access-switch"
+          type="button"
+          onClick={() => {
+            setMode((current) => (current === 'student' ? 'staff' : 'student'));
             setError(null);
-            setMessage(null);
-          }}>
-            {mode === 'login' ? '¿Eres estudiante nuevo? Crear cuenta' : 'Ya tengo una cuenta'}
-          </button>
-        </form>
-      </section>
+          }}
+        >
+          {mode === 'student' ? 'Acceso institucional' : 'Volver a ingreso de estudiantes'}
+        </button>
+      </form>
     </main>
   );
 }
