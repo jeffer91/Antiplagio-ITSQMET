@@ -2,17 +2,20 @@ import { supabase } from './supabase';
 
 export async function bootstrapFirstAdmin(input: {
   fullName: string;
-  email: string;
-  password: string;
+  cedula: string;
+  pin: string;
   code: string;
 }): Promise<void> {
   if (!supabase) throw new Error('Supabase no está configurado.');
 
-  const { data, error } = await supabase.functions.invoke('bootstrap-admin', {
+  const cleanCedula = input.cedula.replace(/\D/g, '');
+  const cleanPin = input.pin.replace(/\D/g, '');
+
+  const { data, error } = await supabase.functions.invoke('bootstrap-admin-pin', {
     body: {
       full_name: input.fullName.trim(),
-      email: input.email.trim(),
-      password: input.password,
+      cedula: cleanCedula,
+      pin: cleanPin,
       code: input.code.trim(),
     },
   });
