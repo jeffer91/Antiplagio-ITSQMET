@@ -116,7 +116,13 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       await onUploaded();
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible cargar el artículo.');
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : typeof caught === 'object' && caught !== null && 'message' in caught
+            ? String((caught as { message?: unknown }).message || 'No fue posible cargar el artículo.')
+            : 'No fue posible cargar el artículo.';
+      setError(message);
     } finally {
       setBusy(false);
     }

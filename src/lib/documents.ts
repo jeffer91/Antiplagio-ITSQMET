@@ -135,27 +135,14 @@ interface ResolvedAcademicContext {
   modality: string | null;
 }
 
-async function pendingAcademicContext(ownerId: string, career: string | null = null, modality: string | null = null): Promise<ResolvedAcademicContext> {
-  const client = requireClient();
-  const { data: profile, error: profileError } = await client
-    .from('profiles')
-    .select('cedula')
-    .eq('id', ownerId)
-    .maybeSingle();
-  if (profileError) throw profileError;
-
-  let resolvedCareer = career;
-  if (!resolvedCareer && profile?.cedula) {
-    const { data: student, error: studentError } = await client
-      .from('students')
-      .select('career_name')
-      .eq('identification', String(profile.cedula))
-      .maybeSingle();
-    if (studentError) throw studentError;
-    resolvedCareer = student?.career_name ? String(student.career_name) : null;
-  }
-
-  return { ownerId, periodId: null, career: resolvedCareer, modality };
+async function pendingAcademicContext(
+  ownerId: string,
+  career: string | null = null,
+  modality: string | null = null,
+): Promise<ResolvedAcademicContext> {
+  // La carga inicial no debe depender de que exista todavía una asignación académica.
+  // El contexto se vincula después, cuando el Administrador habilita el proceso.
+  return { ownerId, periodId: null, career, modality };
 }
 
 async function resolveAcademicContext(input: UploadDocumentInput, currentUserId: string): Promise<ResolvedAcademicContext> {
