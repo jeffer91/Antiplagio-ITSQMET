@@ -138,10 +138,13 @@ export function StudentDashboard(): React.JSX.Element {
     setError(null);
     setAnalysisProgress('Preparando análisis…');
     try {
+      let analysisDocument = activeDocument;
       if (!activeDocument.academic_period_id) {
         await attachPendingDocumentToCurrentProcess(activeDocument.id);
+        const refreshedDocuments = await loadDocuments();
+        analysisDocument = refreshedDocuments.find((document) => document.id === activeDocument.id) ?? activeDocument;
       }
-      const result = await runPlagGuardAttempt(activeDocument, latestVersion, setAnalysisProgress);
+      const result = await runPlagGuardAttempt(analysisDocument, latestVersion, setAnalysisProgress);
       setCorrections(result.corrections);
       await refresh();
     } catch (caught) {
