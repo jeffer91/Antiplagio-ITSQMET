@@ -17,6 +17,7 @@ interface AuthContextValue {
   profileError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInStudent: (cedula: string) => Promise<void>;
+  signInAdminPin: (cedula: string, pin: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -130,6 +131,36 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
         const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
         if (!tokenHash) throw new Error('No fue posible iniciar la sesión.');
+
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'magiclink',
+        });
+        if (verifyError) throw verifyError;
+      },
+      signInAdminPin: async (cedula, pin) => {
+        if (!supabase) throw new Error('Supabase no está configurado.');
+
+        const cleanCedula = cedula.replace(/\D/g, '');
+        const cleanPin = pin.replace(/\D/g, '');
+
+        if (!/^\d{10}$/.test(cleanCedula)) {
+          throw new Error('Ingresa una cédula válida de 10 dígitos.');
+        }
+        if (!/^\d{4,6}$/.test(cleanPin)) {
+          throw new Error('Ingresa un PIN válido.');
+        }
+
+        const { data, error } = await supabase.functions.invoke('admin-pin-login', {
+          body: { cedula: cleanCedula, pin: cleanPin },
+        });
+
+        if (error) {
+          throw new Error((data as { error?: string } | null)?.error || 'Cédula o PIN incorrectos.');
+        }
+
+        const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
+        if (!tokenHash) throw new Error('No fue posible iniciar la sesión administrativa.');
 
         const { error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
