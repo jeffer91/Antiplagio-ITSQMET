@@ -54,6 +54,14 @@ export interface CompleteAnalysisResult {
   corrections: StudentCorrection[];
 }
 
+export interface AdminOverview {
+  articles: number;
+  attempts: number;
+  complies: number;
+  doesNotComply: number;
+  repository: number;
+}
+
 export async function loadProcessState(studentId?: string, periodId?: string): Promise<StudentProcessState> {
   const client = requireClient();
   const { data, error } = await client.rpc('get_student_process_state', {
@@ -83,6 +91,30 @@ export async function loadStudentCurrentResult(studentId?: string, periodId?: st
     ...value,
     attempt_number: value.attempt_number === undefined ? undefined : Number(value.attempt_number),
     consolidated_similarity: value.consolidated_similarity === undefined ? undefined : Number(value.consolidated_similarity),
+  };
+}
+
+export async function loadAdminOverview(): Promise<AdminOverview> {
+  const client = requireClient();
+
+  const [articles, attempts, complies, doesNotComply, repository] = await Promise.all([
+    client.from('documents').select('id', { count: 'exact', head: true }),
+    client.from('analysis_attempts').select('id', { count: 'exact', head: true }),
+    client.from('analysis_attempts').select('id', { count: 'exact', head: true }).eq('status', 'complies'),
+    client.from('analysis_attempts').select('id', { count: 'exact', head: true }).eq('status', 'does_not_comply'),
+    client.from('institutional_repository').select('id', { count: 'exact', head: true }).eq('active', true),
+  ]);
+
+  for (const response of [articles, attempts, complies, doesNotComply, repository]) {
+    if (response.error) throw response.error;
+  }
+
+  return {
+    articles: articles.count ?? 0,
+    attempts: attempts.count ?? 0,
+    complies: complies.count ?? 0,
+    doesNotComply: doesNotComply.count ?? 0,
+    repository: repository.count ?? 0,
   };
 }
 

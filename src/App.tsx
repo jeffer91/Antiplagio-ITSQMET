@@ -30,23 +30,6 @@ function ProfileProblem(): React.JSX.Element {
   );
 }
 
-function AdminAccessDenied(): React.JSX.Element {
-  const { signOut } = useAuth();
-  return (
-    <main className="center-page">
-      <section className="setup-card">
-        <span className="status-badge warning">Acceso restringido</span>
-        <h1>Panel de Administración</h1>
-        <p>Esta dirección está reservada para cuentas con rol Administrador.</p>
-        <div className="modal-actions">
-          <button className="secondary-button" type="button" onClick={() => { window.location.hash = ''; }}>Volver</button>
-          <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 function useHashPath(): string {
   const [hash, setHash] = useState(() => window.location.hash);
   useEffect(() => {
@@ -64,10 +47,17 @@ function AppContent(): React.JSX.Element {
 
   if (!isSupabaseConfigured) return <SetupPage />;
   if (loading) return <LoadingScreen />;
-  if (!session) return <LoginPage adminAccess={adminRoute} />;
-  if (!profile) return <ProfileProblem />;
 
-  if (adminRoute && profile.role !== 'admin') return <AdminAccessDenied />;
+  // El acceso administrativo es independiente del acceso estudiantil.
+  // Si hay una sesión de estudiante abierta, se sigue mostrando el login admin
+  // para permitir reemplazarla por una cuenta Administrador.
+  if (adminRoute) {
+    if (session && profile?.role === 'admin') return <AdminDashboard />;
+    return <LoginPage adminAccess activeRole={profile?.role ?? null} />;
+  }
+
+  if (!session) return <LoginPage />;
+  if (!profile) return <ProfileProblem />;
   if (profile.role === 'admin') return <AdminDashboard />;
   if (profile.role === 'coordinator') return <CoordinatorDashboard />;
   return <StudentDashboard />;

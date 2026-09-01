@@ -5,10 +5,12 @@ import {
   adminCreatePeriod,
   adminSetPeriodState,
   adminSetProfileRole,
+  loadAdminOverview,
   loadEnrollments,
   loadInstitutionalStudent,
   loadPeriods,
   loadProfiles,
+  type AdminOverview,
 } from '../lib/plagGuard';
 import type { Profile, AppRole } from '../types/auth';
 import type { AcademicPeriod, StudentEnrollment } from '../types/plagGuard';
@@ -23,6 +25,7 @@ export function AdminDashboard(): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
   const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
+  const [overview, setOverview] = useState<AdminOverview>({ articles: 0, attempts: 0, complies: 0, doesNotComply: 0, repository: 0 });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,14 +37,16 @@ export function AdminDashboard(): React.JSX.Element {
   const [modality, setModality] = useState('Presencial');
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [profileRows, periodRows, enrollmentRows] = await Promise.all([
+    const [profileRows, periodRows, enrollmentRows, overviewRow] = await Promise.all([
       loadProfiles(),
       loadPeriods(),
       loadEnrollments(),
+      loadAdminOverview(),
     ]);
     setProfiles(profileRows);
     setPeriods(periodRows);
     setEnrollments(enrollmentRows);
+    setOverview(overviewRow);
   }, []);
 
   useEffect(() => {
@@ -107,20 +112,27 @@ export function AdminDashboard(): React.JSX.Element {
 
   return (
     <AppShell role="admin">
-      <header className="page-header compact-header">
+      <header className="page-header compact-header admin-page-header">
         <div>
           <span className="eyebrow dark">Administración institucional</span>
-          <h1>Control de PlagGuard</h1>
-          <p>Gestiona usuarios, periodos, reglas, asignaciones académicas y la apertura de Ordinario/Supletorio.</p>
+          <h1>Panel de Administración</h1>
+          <p>Supervisa artículos, resultados, periodos, intentos, estudiantes y accesos de PlagGuard.</p>
         </div>
+        <nav className="admin-quick-nav" aria-label="Secciones administrativas">
+          <button type="button" onClick={() => document.getElementById('admin-periodos')?.scrollIntoView({ behavior: 'smooth' })}>Periodos</button>
+          <button type="button" onClick={() => document.getElementById('admin-asignaciones')?.scrollIntoView({ behavior: 'smooth' })}>Procesos</button>
+          <button type="button" onClick={() => document.getElementById('admin-usuarios')?.scrollIntoView({ behavior: 'smooth' })}>Usuarios</button>
+        </nav>
       </header>
 
       {error && <div className="alert error-alert page-alert">{error}</div>}
       {message && <div className="alert success-alert page-alert">{message}</div>}
 
-      <section className="metric-grid">
-        <article className="metric-card"><span>Estudiantes</span><strong>{students.length}</strong><small>{activeEnrollments.length} con asignación activa</small></article>
-        <article className="metric-card"><span>Coordinadores</span><strong>{coordinators.length}</strong><small>Acceso a análisis e informes</small></article>
+      <section className="metric-grid admin-metric-grid">
+        <article className="metric-card"><span>Estudiantes</span><strong>{students.length}</strong><small>{activeEnrollments.length} con proceso activo</small></article>
+        <article className="metric-card"><span>Artículos</span><strong>{overview.articles}</strong><small>Versionados en PlagGuard</small></article>
+        <article className="metric-card"><span>Intentos ejecutados</span><strong>{overview.attempts}</strong><small>{overview.doesNotComply} No cumple</small></article>
+        <article className="metric-card"><span>Cumple</span><strong>{overview.complies}</strong><small>{overview.repository} en repositorio final</small></article>
         <article className="metric-card"><span>Periodos</span><strong>{periods.length}</strong><small>{periods.filter((period) => period.active).length} activos</small></article>
         <article className="metric-card"><span>Regla institucional</span><strong>20 %</strong><small>3 Ordinario + 3 Supletorio</small></article>
       </section>
@@ -128,7 +140,7 @@ export function AdminDashboard(): React.JSX.Element {
       {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando configuración…</div> : (
         <>
           <section className="admin-grid">
-            <article className="panel-card">
+            <article className="panel-card" id="admin-periodos">
               <div className="section-heading"><div><span className="eyebrow dark">Periodos</span><h2>Apertura de procesos</h2></div></div>
               <div className="inline-form">
                 <input value={newPeriodName} onChange={(event) => setNewPeriodName(event.target.value)} placeholder="Ej. Abril 2026 – Septiembre 2026" disabled={busy} />
@@ -149,8 +161,8 @@ export function AdminDashboard(): React.JSX.Element {
               </div>
             </article>
 
-            <article className="panel-card">
-              <div className="section-heading"><div><span className="eyebrow dark">Asignación</span><h2>Periodo + carrera + modalidad</h2></div></div>
+            <article className="panel-card" id="admin-asignaciones">
+              <div className="section-heading"><div><span className="eyebrow dark">Procesos</span><h2>Periodo + carrera + modalidad</h2></div></div>
               <label className="field-label">Estudiante
                 <select value={studentId} onChange={(event) => void chooseStudent(event.target.value)} disabled={busy}>
                   <option value="">Seleccionar…</option>
@@ -175,8 +187,8 @@ export function AdminDashboard(): React.JSX.Element {
             </article>
           </section>
 
-          <section className="panel-card">
-            <div className="section-heading"><div><span className="eyebrow dark">Usuarios</span><h2>Perfiles y roles</h2></div></div>
+          <section className="panel-card" id="admin-usuarios">
+            <div className="section-heading"><div><span className="eyebrow dark">Usuarios y roles</span><h2>Perfiles y roles</h2></div></div>
             <div className="admin-list">
               {profiles.map((profile) => (
                 <div className="admin-row" key={profile.id}>
