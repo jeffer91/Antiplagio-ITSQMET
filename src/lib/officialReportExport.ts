@@ -23,14 +23,66 @@ function brandSpreadsheet(value: string): string {
     .replaceAll('Indicadores IA', 'Escritura asistida');
 }
 
+function downloadBlob(content: string, mimeType: string, fileName: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function printHtmlAsPdf(html: string, title: string): void {
+  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+  if (!printWindow) {
+    throw new Error('El navegador bloqueó la ventana del informe. Permite ventanas emergentes para PlagGuard e inténtalo nuevamente.');
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.document.title = title;
+
+  const triggerPrint = () => {
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  if (printWindow.document.readyState === 'complete') {
+    window.setTimeout(triggerPrint, 250);
+  } else {
+    printWindow.addEventListener('load', () => window.setTimeout(triggerPrint, 250), { once: true });
+  }
+}
+
 export async function exportOfficialReportPdf(report: IntegrityReportRecord): Promise<{ canceled: boolean; filePath: string | null }> {
-  if (!window.siaiDesktop?.savePdf) throw new Error('La exportación PDF solo está disponible en la aplicación de escritorio.');
   if (!(await verifyOfficialReport(report))) throw new Error('La huella oficial del informe no pudo verificarse en el servidor.');
-  return window.siaiDesktop.savePdf(brandHtml(buildIntegrityReportHtml(report)), `${reportStem(report)}.pdf`);
+
+  const fileName = `${reportStem(report)}.pdf`;
+  const html = brandHtml(buildIntegrityReportHtml(report));
+
+  if (window.siaiDesktop?.savePdf) {
+    return window.siaiDesktop.savePdf(html, fileName);
+  }
+
+  printHtmlAsPdf(html, fileName);
+  return { canceled: false, filePath: null };
 }
 
 export async function exportOfficialReportExcel(report: IntegrityReportRecord): Promise<{ canceled: boolean; filePath: string | null }> {
-  if (!window.siaiDesktop?.saveExcel) throw new Error('La exportación Excel solo está disponible en la aplicación de escritorio.');
   if (!(await verifyOfficialReport(report))) throw new Error('La huella oficial del informe no pudo verificarse en el servidor.');
-  return window.siaiDesktop.saveExcel(brandSpreadsheet(buildIntegrityReportSpreadsheet(report)), `${reportStem(report)}.xls`);
+
+  const fileName = `${reportStem(report)}.xls`;
+  const content = brandSpreadsheet(buildIntegrityReportSpreadsheet(report));
+
+  if (window.siaiDesktop?.saveExcel) {
+    return window.siaiDesktop.saveExcel(content, fileName);
+  }
+
+  downloadBlob(content, 'application/vnd.ms-excel;charset=utf-8', fileName);
+  return { canceled: false, filePath: null };
 }
