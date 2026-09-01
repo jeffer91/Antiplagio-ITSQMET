@@ -6,6 +6,7 @@ import {
   adminSetPeriodState,
   adminSetProfileRole,
   loadEnrollments,
+  loadInstitutionalStudent,
   loadPeriods,
   loadProfiles,
 } from '../lib/plagGuard';
@@ -79,6 +80,21 @@ export function AdminDashboard(): React.JSX.Element {
     }, 'Periodo creado con 20 % y 3 intentos Ordinario + 3 Supletorio.');
   };
 
+  const chooseStudent = async (value: string): Promise<void> => {
+    setStudentId(value);
+    const selected = students.find((student) => student.id === value);
+    if (!selected?.cedula) {
+      setCareer('');
+      return;
+    }
+    try {
+      const institutional = await loadInstitutionalStudent(selected.cedula);
+      setCareer(institutional?.career_name ?? '');
+    } catch {
+      setCareer('');
+    }
+  };
+
   const assignStudent = async (): Promise<void> => {
     if (!studentId || !periodId || !career.trim() || !modality.trim()) {
       setError('Completa estudiante, periodo, carrera y modalidad.');
@@ -136,9 +152,9 @@ export function AdminDashboard(): React.JSX.Element {
             <article className="panel-card">
               <div className="section-heading"><div><span className="eyebrow dark">Asignación</span><h2>Periodo + carrera + modalidad</h2></div></div>
               <label className="field-label">Estudiante
-                <select value={studentId} onChange={(event) => setStudentId(event.target.value)} disabled={busy}>
+                <select value={studentId} onChange={(event) => void chooseStudent(event.target.value)} disabled={busy}>
                   <option value="">Seleccionar…</option>
-                  {students.map((student) => <option key={student.id} value={student.id}>{student.full_name || student.email}</option>)}
+                  {students.map((student) => <option key={student.id} value={student.id}>{student.full_name || student.email}{student.cedula ? ` · ${student.cedula}` : ''}</option>)}
                 </select>
               </label>
               <label className="field-label">Periodo
@@ -148,7 +164,7 @@ export function AdminDashboard(): React.JSX.Element {
                 </select>
               </label>
               <label className="field-label">Carrera
-                <input value={career} onChange={(event) => setCareer(event.target.value)} placeholder="Ej. Administración de Empresas" disabled={busy} />
+                <input value={career} onChange={(event) => setCareer(event.target.value)} placeholder="Se completa desde Firebase al elegir estudiante" disabled={busy} />
               </label>
               <label className="field-label">Modalidad
                 <select value={modality} onChange={(event) => setModality(event.target.value)} disabled={busy}>
@@ -164,7 +180,7 @@ export function AdminDashboard(): React.JSX.Element {
             <div className="admin-list">
               {profiles.map((profile) => (
                 <div className="admin-row" key={profile.id}>
-                  <div><strong>{profile.full_name || 'Sin nombre'}</strong><span>{profile.email}</span></div>
+                  <div><strong>{profile.full_name || 'Sin nombre'}</strong><span>{profile.cedula ? `${profile.cedula} · ` : ''}{profile.email}</span></div>
                   <select
                     value={profile.role}
                     disabled={busy}

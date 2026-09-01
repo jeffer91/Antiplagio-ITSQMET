@@ -130,9 +130,32 @@ interface UploadDocumentInput {
 
 interface ResolvedAcademicContext {
   ownerId: string;
-  periodId: string;
-  career: string;
-  modality: string;
+  periodId: string | null;
+  career: string | null;
+  modality: string | null;
+}
+
+async function pendingAcademicContext(ownerId: string, career: string | null = null, modality: string | null = null): Promise<ResolvedAcademicContext> {
+  const client = requireClient();
+  const { data: profile, error: profileError } = await client
+    .from('profiles')
+    .select('cedula')
+    .eq('id', ownerId)
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  let resolvedCareer = career;
+  if (!resolvedCareer && profile?.cedula) {
+    const { data: student, error: studentError } = await client
+      .from('students')
+      .select('career_name')
+      .eq('identification', String(profile.cedula))
+      .maybeSingle();
+    if (studentError) throw studentError;
+    resolvedCareer = student?.career_name ? String(student.career_name) : null;
+  }
+
+  return { ownerId, periodId: null, career: resolvedCareer, modality };
 }
 
 async function resolveAcademicContext(input: UploadDocumentInput, currentUserId: string): Promise<ResolvedAcademicContext> {
@@ -145,16 +168,42 @@ async function resolveAcademicContext(input: UploadDocumentInput, currentUserId:
       .eq('id', input.documentId)
       .maybeSingle();
     if (error) throw error;
-    if (!data) throw new Error('El documento ya no existe.');
-    if (!data.academic_period_id || !data.career || !data.modality) {
-      throw new Error('El documento no tiene contexto académico. El Administrador debe regularizarlo antes de crear otra versión.');
+    if (!data) throw new Error('El artículo ya no existe.');
+
+    const ownerId = String(data.owner_id);
+    if (data.academic_period_id && data.career && data.modality) {
+      return {
+        ownerId,
+        periodId: String(data.academic_period_id),
+        career: String(data.career),
+        modality: String(data.modality),
+      };
     }
-    return {
-      ownerId: String(data.owner_id),
-      periodId: String(data.academic_period_id),
-      career: String(data.career),
-      modality: String(data.modality),
-    };
+
+    const { data: enrollment, error: enrollmentError } = await client
+      .from('student_enrollments')
+      .select('period_id,career,modality')
+      .eq('student_id', ownerId)
+      .eq('active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (enrollmentError) throw enrollmentError;
+
+    if (enrollment) {
+      return {
+        ownerId,
+        periodId: String(enrollment.period_id),
+        career: String(enrollment.career),
+        modality: String(enrollment.modality),
+      };
+    }
+
+    return pendingAcademicContext(
+      ownerId,
+      data.career ? String(data.career) : null,
+      data.modality ? String(data.modality) : null,
+    );
   }
 
   if (input.ownerId && input.periodId && input.career && input.modality) {
@@ -176,7 +225,8 @@ async function resolveAcademicContext(input: UploadDocumentInput, currentUserId:
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error('El estudiante todavía no tiene periodo, carrera y modalidad asignados.');
+  if (!data) return pendingAcademicContext(ownerId);
+
   return {
     ownerId,
     periodId: String(data.period_id),

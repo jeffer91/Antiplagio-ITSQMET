@@ -30,6 +30,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
   const [targets, setTargets] = useState<StudentUploadTarget[]>([]);
   const [selectedTarget, setSelectedTarget] = useState('');
   const [studentContext, setStudentContext] = useState<StudentUploadTarget | null>(null);
+  const [pendingProcess, setPendingProcess] = useState(false);
 
   const isStaff = profile?.role === 'coordinator' || profile?.role === 'admin';
 
@@ -41,6 +42,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
     setStep(null);
     setSelectedTarget('');
     setStudentContext(null);
+    setPendingProcess(false);
 
     if (document) return;
 
@@ -55,7 +57,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       void loadProcessState()
         .then((state) => {
           if (!state.configured || !state.period_id || !state.period_name || !state.career || !state.modality) {
-            setError('Tu perfil todavía no tiene periodo, carrera y modalidad asignados. Comunícate con el Administrador.');
+            setPendingProcess(true);
             return;
           }
           setStudentContext({
@@ -68,7 +70,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
             modality: state.modality,
           });
         })
-        .catch((caught) => setError(caught instanceof Error ? caught.message : 'No fue posible validar tu proceso.'));
+        .catch(() => setPendingProcess(true));
     }
   }, [document, isStaff, open, profile]);
 
@@ -96,8 +98,8 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       setError('El archivo supera el límite de 25 MB.');
       return;
     }
-    if (!document && !activeTarget) {
-      setError(isStaff ? 'Selecciona el estudiante propietario del trabajo.' : 'No existe un proceso académico activo para esta cuenta.');
+    if (!document && isStaff && !activeTarget) {
+      setError('Selecciona el estudiante propietario del artículo.');
       return;
     }
 
@@ -108,7 +110,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
         title,
         file,
         documentId: document?.id,
-        ownerId: activeTarget?.studentId,
+        ownerId: activeTarget?.studentId ?? (!isStaff ? profile?.id : undefined),
         periodId: activeTarget?.periodId,
         career: activeTarget?.career,
         modality: activeTarget?.modality,
@@ -117,7 +119,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       await onUploaded();
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible cargar el documento.');
+      setError(caught instanceof Error ? caught.message : 'No fue posible cargar el artículo.');
     } finally {
       setBusy(false);
     }
@@ -129,7 +131,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
         <div className="modal-heading">
           <div>
             <span className="eyebrow dark">{document ? 'Nueva versión' : 'Nueva entrega'}</span>
-            <h2 id="upload-title">{document ? `Subir versión ${document.current_version + 1}` : 'Cargar trabajo académico'}</h2>
+            <h2 id="upload-title">{document ? `Subir versión ${document.current_version + 1}` : 'Cargar artículo académico'}</h2>
           </div>
           <button className="icon-button" type="button" onClick={onClose} disabled={busy} aria-label="Cerrar">×</button>
         </div>
@@ -156,8 +158,15 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
             </div>
           )}
 
+          {!document && !isStaff && pendingProcess && (
+            <div className="upload-note pending-upload-note">
+              <strong>Puedes cargar el artículo ahora</strong>
+              <span>Quedará guardado con trazabilidad. El análisis se habilitará cuando tu periodo académico esté asignado.</span>
+            </div>
+          )}
+
           <label className="field-label">
-            Título del trabajo
+            Título del artículo
             <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={240} disabled={busy || Boolean(document)} placeholder="Título del artículo académico" />
           </label>
 
@@ -169,13 +178,13 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
               disabled={busy}
             />
             <span className="file-picker-icon">↑</span>
-            <strong>{file ? 'Archivo seleccionado' : 'Seleccionar documento'}</strong>
+            <strong>{file ? 'Archivo seleccionado' : 'Seleccionar artículo'}</strong>
             <small>{fileHint}</small>
           </label>
 
           <div className="upload-note">
             <strong>PlagGuard conserva la trazabilidad</strong>
-            <span>El estudiante permanece como propietario aunque la carga la realice un coordinador. El archivo se almacena de forma privada, se calcula SHA-256 y cada corrección queda como una versión independiente.</span>
+            <span>El artículo se almacena de forma privada, se calcula SHA-256 y cada corrección queda como una versión independiente.</span>
           </div>
 
           {step && <div className="processing-line"><span className={step === 'done' ? 'tiny-check' : 'mini-spinner'} />{progressText[step]}</div>}
@@ -183,7 +192,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
 
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button className="primary-button compact" type="submit" disabled={busy}>{busy ? 'Procesando…' : document ? 'Subir nueva versión' : 'Cargar documento'}</button>
+            <button className="primary-button compact" type="submit" disabled={busy}>{busy ? 'Procesando…' : document ? 'Subir nueva versión' : 'Cargar artículo'}</button>
           </div>
         </form>
       </section>

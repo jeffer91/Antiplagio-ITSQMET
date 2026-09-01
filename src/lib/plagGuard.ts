@@ -29,6 +29,14 @@ export interface StudentUploadTarget {
   modality: string;
 }
 
+export interface InstitutionalStudent {
+  identification: string;
+  full_name: string;
+  career_code: string | null;
+  career_name: string | null;
+  campus: string | null;
+}
+
 export interface StudentCorrection {
   id: string;
   category: 'similarity' | 'citation' | 'apa' | 'assisted_writing';
@@ -97,10 +105,29 @@ export async function loadProfiles(): Promise<Profile[]> {
   const client = requireClient();
   const { data, error } = await client
     .from('profiles')
-    .select('id,email,full_name,role,created_at')
+    .select('id,email,full_name,role,cedula,created_at')
     .order('full_name', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Profile[];
+}
+
+export async function loadInstitutionalStudent(identification: string): Promise<InstitutionalStudent | null> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('students')
+    .select('identification,full_name,career_code,career_name,campus')
+    .eq('identification', identification)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? data as InstitutionalStudent : null;
+}
+
+export async function attachPendingDocumentToCurrentProcess(documentId: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('attach_pending_document_to_current_process', {
+    p_document_id: documentId,
+  });
+  if (error) throw error;
 }
 
 export async function loadEnrollments(): Promise<StudentEnrollment[]> {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -23,21 +24,50 @@ function ProfileProblem(): React.JSX.Element {
         <span className="status-badge warning">Revisión requerida</span>
         <h1>No pudimos validar tu perfil</h1>
         <p>{profileError || 'El perfil de esta cuenta no está disponible.'}</p>
-        <p>Verifica que la base de datos tenga aplicadas las migraciones de Supabase desde <code>schema.sql</code> hasta <code>phase15.sql</code>, en orden.</p>
         <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
       </section>
     </main>
   );
 }
 
+function AdminAccessDenied(): React.JSX.Element {
+  const { signOut } = useAuth();
+  return (
+    <main className="center-page">
+      <section className="setup-card">
+        <span className="status-badge warning">Acceso restringido</span>
+        <h1>Panel de Administración</h1>
+        <p>Esta dirección está reservada para cuentas con rol Administrador.</p>
+        <div className="modal-actions">
+          <button className="secondary-button" type="button" onClick={() => { window.location.hash = ''; }}>Volver</button>
+          <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function useHashPath(): string {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHashChange = (): void => setHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+  return hash;
+}
+
 function AppContent(): React.JSX.Element {
   const { loading, session, profile } = useAuth();
+  const hash = useHashPath();
+  const adminRoute = hash === '#/admin';
 
   if (!isSupabaseConfigured) return <SetupPage />;
   if (loading) return <LoadingScreen />;
-  if (!session) return <LoginPage />;
+  if (!session) return <LoginPage adminAccess={adminRoute} />;
   if (!profile) return <ProfileProblem />;
 
+  if (adminRoute && profile.role !== 'admin') return <AdminAccessDenied />;
   if (profile.role === 'admin') return <AdminDashboard />;
   if (profile.role === 'coordinator') return <CoordinatorDashboard />;
   return <StudentDashboard />;

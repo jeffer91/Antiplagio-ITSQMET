@@ -2,9 +2,12 @@ import { type FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ITSQMET_LOGO } from '../assets/itsqmetLogo';
 
-export function LoginPage(): React.JSX.Element {
+interface LoginPageProps {
+  adminAccess?: boolean;
+}
+
+export function LoginPage({ adminAccess = false }: LoginPageProps): React.JSX.Element {
   const { signIn, signInStudent } = useAuth();
-  const [mode, setMode] = useState<'student' | 'staff'>('student');
   const [cedula, setCedula] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +20,7 @@ export function LoginPage(): React.JSX.Element {
     setError(null);
 
     try {
-      if (mode === 'student') {
+      if (!adminAccess) {
         const cleanCedula = cedula.replace(/\D/g, '');
         if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
         await signInStudent(cleanCedula);
@@ -38,12 +41,12 @@ export function LoginPage(): React.JSX.Element {
         <img className="institutional-login-logo" src={ITSQMET_LOGO} alt="ITSQMET - Instituto Superior Tecnológico Quito Metropolitano" />
 
         <div className="student-login-heading">
-          <span className="status-badge">{mode === 'student' ? 'Estudiantes' : 'Acceso institucional'}</span>
-          <h1>{mode === 'student' ? 'Ingresa con tu cédula' : 'Acceso institucional'}</h1>
-          <p>{mode === 'student' ? 'Escribe los 10 dígitos de tu cédula.' : 'Coordinadores y administradores.'}</p>
+          <span className="status-badge">{adminAccess ? 'Administración' : 'Estudiantes'}</span>
+          <h1>{adminAccess ? 'Acceso administrativo' : 'Ingresa con tu cédula'}</h1>
+          <p>{adminAccess ? 'Utiliza tu cuenta institucional de Administrador.' : 'Escribe los 10 dígitos de tu cédula.'}</p>
         </div>
 
-        {mode === 'student' ? (
+        {!adminAccess ? (
           <label className="student-login-field">
             Cédula
             <input
@@ -62,7 +65,7 @@ export function LoginPage(): React.JSX.Element {
           <>
             <label className="student-login-field">
               Correo electrónico
-              <input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@itsqmet.edu.ec" required />
+              <input autoFocus autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@itsqmet.edu.ec" required />
             </label>
             <label className="student-login-field">
               Contraseña
@@ -75,12 +78,15 @@ export function LoginPage(): React.JSX.Element {
 
         <button className="primary-button" disabled={busy} type="submit">{busy ? 'Ingresando…' : 'Ingresar'}</button>
 
-        <button className="text-button student-access-switch" type="button" onClick={() => {
-          setMode((current) => (current === 'student' ? 'staff' : 'student'));
-          setError(null);
-        }}>
-          {mode === 'student' ? 'Acceso institucional' : 'Volver a estudiantes'}
-        </button>
+        {adminAccess ? (
+          <button className="text-button student-access-switch" type="button" onClick={() => { window.location.hash = ''; setError(null); }}>
+            Volver al acceso de estudiantes
+          </button>
+        ) : (
+          <button className="text-button student-access-switch" type="button" onClick={() => { window.location.hash = '/admin'; setError(null); }}>
+            Acceso administrativo
+          </button>
+        )}
       </form>
     </main>
   );

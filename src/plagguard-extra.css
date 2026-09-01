@@ -316,3 +316,11 @@ body, .plagguard-layout { background: var(--itsqmet-bg); color: var(--itsqmet-na
   .institutional-topbar-brand > div { display: none; }
   .institutional-topbar-brand { min-width: auto; }
 }
+
+.pending-upload-note {
+  border-left: 3px solid var(--itsqmet-gold);
+  background: #fbf7ef;
+}
+.student-welcome h1 {
+  text-transform: none;
+}

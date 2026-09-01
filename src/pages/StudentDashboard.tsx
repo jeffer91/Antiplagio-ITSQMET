@@ -6,16 +6,19 @@ import { runPlagGuardAttempt } from '../lib/completeAnalysis';
 import { loadDocuments, loadDocumentVersions } from '../lib/documents';
 import { buildIntegrityReportSnapshot } from '../lib/integrityReport';
 import {
+  attachPendingDocumentToCurrentProcess,
   buildStudentCorrections,
+  loadInstitutionalStudent,
   loadProcessState,
   loadStudentCurrentResult,
+  type InstitutionalStudent,
   type StudentCorrection,
 } from '../lib/plagGuard';
 import type { DocumentListItem } from '../types/documents';
 import type { StudentCurrentResult, StudentProcessState } from '../types/plagGuard';
 
 function processLabel(state: StudentProcessState | null): string {
-  if (!state?.configured) return 'Sin proceso asignado';
+  if (!state?.configured) return 'Pendiente de proceso';
   if (state.stage === 'completed') return 'Proceso completado';
   if (state.stage === 'awaiting_supplementary') return 'Pasa a Supletorio';
   if (state.stage === 'supplementary') return 'Supletorio';
@@ -25,7 +28,7 @@ function processLabel(state: StudentProcessState | null): string {
 }
 
 function remainingLabel(state: StudentProcessState | null): string {
-  if (!state?.configured) return '—';
+  if (!state?.configured) return 'Pendiente';
   if (state.stage === 'supplementary') return `${state.supplementary_remaining ?? 0} de ${state.supplementary_limit ?? 3}`;
   if (state.stage === 'completed' || state.stage === 'exhausted') return '0';
   if (state.stage === 'awaiting_supplementary') return 'Esperando apertura';
@@ -43,6 +46,7 @@ export function StudentDashboard(): React.JSX.Element {
   const { profile } = useAuth();
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [process, setProcess] = useState<StudentProcessState | null>(null);
+  const [institutionalStudent, setInstitutionalStudent] = useState<InstitutionalStudent | null>(null);
   const [currentResult, setCurrentResult] = useState<StudentCurrentResult>({ available: false });
   const [corrections, setCorrections] = useState<StudentCorrection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +94,13 @@ export function StudentDashboard(): React.JSX.Element {
   }, [restoreResultDetail]);
 
   useEffect(() => {
+    if (!profile?.cedula) return;
+    void loadInstitutionalStudent(profile.cedula)
+      .then(setInstitutionalStudent)
+      .catch(() => setInstitutionalStudent(null));
+  }, [profile?.cedula]);
+
+  useEffect(() => {
     void refresh()
       .catch((caught) => setError(caught instanceof Error ? caught.message : 'No fue posible cargar tu proceso.'))
       .finally(() => setLoading(false));
@@ -107,13 +118,14 @@ export function StudentDashboard(): React.JSX.Element {
   const resultIsCompliant = currentResult.available && currentResult.status === 'complies';
   const resultIsNotCompliant = currentResult.available && currentResult.status === 'does_not_comply';
   const latestAlreadyAnalyzed = Boolean(latestVersion && currentResult.target_version_id === latestVersion.id);
-  const processBlocked = !process?.configured
-    || process.stage === 'completed'
+  const processBlocked = Boolean(process?.configured && (
+    process.stage === 'completed'
     || process.stage === 'awaiting_supplementary'
     || process.stage === 'exhausted'
-    || process.stage === 'ordinary_closed';
-  const canAnalyze = Boolean(latestVersion && latestVersion.extraction_status === 'ready' && !latestAlreadyAnalyzed && !processBlocked);
-  const canUpload = Boolean(process?.configured && !processBlocked);
+    || process.stage === 'ordinary_closed'
+  ));
+  const canAnalyze = Boolean(process?.configured && latestVersion && latestVersion.extraction_status === 'ready' && !latestAlreadyAnalyzed && !processBlocked);
+  const canUpload = Boolean(!resultIsCompliant && !processBlocked);
 
   const openUpload = (): void => {
     setVersionTarget(activeDocument ?? null);
@@ -126,6 +138,9 @@ export function StudentDashboard(): React.JSX.Element {
     setError(null);
     setAnalysisProgress('Preparando análisis…');
     try {
+      if (!activeDocument.academic_period_id) {
+        await attachPendingDocumentToCurrentProcess(activeDocument.id);
+      }
       const result = await runPlagGuardAttempt(activeDocument, latestVersion, setAnalysisProgress);
       setCorrections(result.corrections);
       await refresh();
@@ -145,14 +160,21 @@ export function StudentDashboard(): React.JSX.Element {
     );
   }
 
+  const institutionalLine = [
+    institutionalStudent?.career_name,
+    institutionalStudent?.campus ? `Sede ${institutionalStudent.campus}` : null,
+  ].filter(Boolean).join(' · ');
+
   return (
     <AppShell role="student">
       <div className="student-simple-shell">
         <header className="student-welcome">
           <div>
             <span className="eyebrow dark">PlagGuard · ITSQMET</span>
-            <h1>Hola, {profile?.full_name?.split(' ')[0] || 'estudiante'}</h1>
-            <p>{process?.configured ? `${process.period_name} · ${process.career} · ${process.modality}` : 'Tu proceso todavía no ha sido configurado.'}</p>
+            <h1>{profile?.full_name || institutionalStudent?.full_name || 'Estudiante'}</h1>
+            <p>{process?.configured
+              ? `${process.period_name} · ${process.career} · ${process.modality}`
+              : institutionalLine || 'Datos institucionales verificados.'}</p>
           </div>
           <span className="simple-process-pill">{processLabel(process)}</span>
         </header>
@@ -168,8 +190,8 @@ export function StudentDashboard(): React.JSX.Element {
 
         {!process?.configured && (
           <section className="student-process-alert neutral">
-            <strong>Falta configurar tu proceso</strong>
-            <p>El Administrador debe asignarte periodo académico, carrera y modalidad antes de que puedas cargar un trabajo.</p>
+            <strong>Artículo habilitado para carga</strong>
+            <p>Puedes subir tu artículo desde ahora. El análisis y los intentos se habilitarán cuando tu periodo académico quede asignado.</p>
           </section>
         )}
 
@@ -211,8 +233,13 @@ export function StudentDashboard(): React.JSX.Element {
             <div className="student-next-action">
               {!activeDocument ? (
                 <>
-                  <div><strong>1. Sube tu trabajo</strong><span>PDF o DOCX, máximo 25 MB.</span></div>
-                  <button className="primary-button compact" type="button" onClick={openUpload} disabled={!canUpload}>Subir trabajo</button>
+                  <div><strong>1. Sube tu artículo</strong><span>PDF o DOCX, máximo 25 MB.</span></div>
+                  <button className="primary-button compact" type="button" onClick={openUpload} disabled={!canUpload}>Subir artículo</button>
+                </>
+              ) : !process?.configured ? (
+                <>
+                  <div><strong>Artículo cargado</strong><span>{latestVersion?.original_file_name ?? activeDocument.title} · pendiente de habilitación para análisis.</span></div>
+                  <button className="primary-button compact" type="button" onClick={openUpload} disabled={!canUpload}>Subir nueva versión</button>
                 </>
               ) : latestAlreadyAnalyzed && resultIsNotCompliant ? (
                 <>
@@ -221,7 +248,7 @@ export function StudentDashboard(): React.JSX.Element {
                 </>
               ) : (
                 <>
-                  <div><strong>{latestVersion ? `Versión ${latestVersion.version_number} lista` : 'Documento cargado'}</strong><span>{latestVersion?.original_file_name ?? activeDocument.title}</span></div>
+                  <div><strong>{latestVersion ? `Versión ${latestVersion.version_number} lista` : 'Artículo cargado'}</strong><span>{latestVersion?.original_file_name ?? activeDocument.title}</span></div>
                   <button className="primary-button compact" type="button" onClick={() => void runAnalysis()} disabled={!canAnalyze || analyzing}>
                     {analyzing ? 'Analizando…' : 'Analizar ahora'}
                   </button>
