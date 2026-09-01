@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { ITSQMET_LOGO } from '../assets/itsqmetLogo';
 
 export function LoginPage(): React.JSX.Element {
   const { signIn, signInStudent } = useAuth();
@@ -18,9 +19,7 @@ export function LoginPage(): React.JSX.Element {
     try {
       if (mode === 'student') {
         const cleanCedula = cedula.replace(/\D/g, '');
-        if (!/^\d{10}$/.test(cleanCedula)) {
-          throw new Error('Ingresa una cédula válida de 10 dígitos.');
-        }
+        if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
         await signInStudent(cleanCedula);
       } else {
         if (!email.trim() || !password) throw new Error('Completa correo y contraseña.');
@@ -36,18 +35,12 @@ export function LoginPage(): React.JSX.Element {
   return (
     <main className="student-login-page">
       <form className="student-login-card" onSubmit={(event) => void submit(event)}>
-        <div className="brand student-login-brand">
-          <div className="brand-mark">PG</div>
-          <div>
-            <strong>PlagGuard</strong>
-            <span>ITSQMET</span>
-          </div>
-        </div>
+        <img className="institutional-login-logo" src={ITSQMET_LOGO} alt="ITSQMET - Instituto Superior Tecnológico Quito Metropolitano" />
 
         <div className="student-login-heading">
           <span className="status-badge">{mode === 'student' ? 'Estudiantes' : 'Acceso institucional'}</span>
           <h1>{mode === 'student' ? 'Ingresa con tu cédula' : 'Acceso institucional'}</h1>
-          <p>{mode === 'student' ? 'Escribe únicamente tu número de cédula.' : 'Coordinadores y administradores.'}</p>
+          <p>{mode === 'student' ? 'Escribe los 10 dígitos de tu cédula.' : 'Coordinadores y administradores.'}</p>
         </div>
 
         {mode === 'student' ? (
@@ -61,7 +54,7 @@ export function LoginPage(): React.JSX.Element {
               maxLength={10}
               value={cedula}
               onChange={(event) => setCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="Ej. 1712345678"
+              placeholder="0102596566"
               required
             />
           </label>
@@ -69,44 +62,24 @@ export function LoginPage(): React.JSX.Element {
           <>
             <label className="student-login-field">
               Correo electrónico
-              <input
-                autoComplete="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="correo@institucion.edu.ec"
-                required
-              />
+              <input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@itsqmet.edu.ec" required />
             </label>
             <label className="student-login-field">
               Contraseña
-              <input
-                autoComplete="current-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Contraseña"
-                required
-              />
+              <input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contraseña" required />
             </label>
           </>
         )}
 
         {error && <div className="alert error-alert">{error}</div>}
 
-        <button className="primary-button" disabled={busy} type="submit">
-          {busy ? 'Ingresando…' : 'Ingresar'}
-        </button>
+        <button className="primary-button" disabled={busy} type="submit">{busy ? 'Ingresando…' : 'Ingresar'}</button>
 
-        <button
-          className="text-button student-access-switch"
-          type="button"
-          onClick={() => {
-            setMode((current) => (current === 'student' ? 'staff' : 'student'));
-            setError(null);
-          }}
-        >
-          {mode === 'student' ? 'Acceso institucional' : 'Volver a ingreso de estudiantes'}
+        <button className="text-button student-access-switch" type="button" onClick={() => {
+          setMode((current) => (current === 'student' ? 'staff' : 'student'));
+          setError(null);
+        }}>
+          {mode === 'student' ? 'Acceso institucional' : 'Volver a estudiantes'}
         </button>
       </form>
     </main>

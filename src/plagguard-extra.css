@@ -233,3 +233,86 @@
     width: auto;
   }
 }
+
+
+/* Identidad visual institucional ITSQMET */
+:root {
+  --itsqmet-navy: #22262f;
+  --itsqmet-navy-2: #303641;
+  --itsqmet-gold: #d6b472;
+  --itsqmet-gold-soft: #f5ead4;
+  --itsqmet-red: #e91c21;
+  --itsqmet-bg: #f6f4ef;
+  --itsqmet-border: #ddd7ca;
+}
+
+body, .plagguard-layout { background: var(--itsqmet-bg); color: var(--itsqmet-navy); }
+.student-login-page {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(214,180,114,.22), transparent 34%),
+    linear-gradient(180deg, #fbfaf7 0%, #f2efe8 100%);
+}
+.student-login-card {
+  border-color: var(--itsqmet-border);
+  box-shadow: 0 24px 70px rgba(34,38,47,.12);
+}
+.institutional-login-logo {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin: 0 auto 28px;
+}
+.student-login-heading h1 { color: var(--itsqmet-navy); }
+.status-badge {
+  background: var(--itsqmet-gold-soft);
+  color: #7b5b24;
+}
+.student-login-field input:focus,
+.auth-card input:focus,
+.field-label input:focus {
+  border-color: var(--itsqmet-gold);
+  box-shadow: 0 0 0 3px rgba(214,180,114,.22);
+}
+.primary-button {
+  background: var(--itsqmet-navy);
+  box-shadow: 0 8px 20px rgba(34,38,47,.20);
+}
+.primary-button:hover:not(:disabled) { background: #151922; }
+.text-button, .text-link-button, .notification-action { color: #7a5b26; }
+.plagguard-topbar {
+  border-bottom-color: var(--itsqmet-border);
+  background: rgba(255,255,255,.97);
+}
+.institutional-topbar-brand {
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.institutional-topbar-brand img {
+  width: 170px;
+  height: auto;
+  object-fit: contain;
+}
+.institutional-topbar-brand > div {
+  padding-left: 13px;
+  border-left: 1px solid var(--itsqmet-border);
+  display: flex;
+  flex-direction: column;
+}
+.institutional-topbar-brand strong { color: var(--itsqmet-navy); font-size: 15px; }
+.institutional-topbar-brand span { margin-top: 2px; color: #77715f; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.avatar { background: var(--itsqmet-navy); }
+.role-pill, .simple-process-pill { background: var(--itsqmet-gold-soft); color: #70531f; }
+.notification-bell.has-alerts { color: var(--itsqmet-red); border-color: #f2c1c3; background: #fff5f5; }
+.notification-bell strong { background: var(--itsqmet-red); }
+.logout-button { border-color: var(--itsqmet-border); color: #625e55; }
+.panel-card, .metric-card, .student-result-card, .correction-card, .admin-row {
+  border-color: var(--itsqmet-border);
+}
+.eyebrow.dark { color: #8a672c; }
+@media (max-width: 760px) {
+  .institutional-topbar-brand img { width: 118px; }
+  .institutional-topbar-brand > div { display: none; }
+  .institutional-topbar-brand { min-width: auto; }
+}

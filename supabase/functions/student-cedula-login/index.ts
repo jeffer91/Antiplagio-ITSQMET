@@ -7,12 +7,34 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const FIREBASE_PROJECT_ID = "utet-4387a";
+const FIREBASE_API_KEY = "AIzaSyCaHf1C0BB0X_H3BDZ1o-UDAsPmLTjsZLA";
+
 function json(status: number, body: Record<string, unknown>) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+type FirestoreValue = { stringValue?: string; booleanValue?: boolean; integerValue?: string; doubleValue?: number; timestampValue?: string; nullValue?: null; };
+function unwrap(fields: Record<string, FirestoreValue> | undefined): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    if ("stringValue" in value) result[key] = value.stringValue ?? "";
+    else if ("booleanValue" in value) result[key] = Boolean(value.booleanValue);
+    else if ("integerValue" in value) result[key] = Number(value.integerValue ?? 0);
+    else if ("doubleValue" in value) result[key] = Number(value.doubleValue ?? 0);
+    else if ("timestampValue" in value) result[key] = value.timestampValue ?? "";
+    else result[key] = null;
+  }
+  return result;
+}
+async function firestoreDocument(collection: string, documentId: string): Promise<Record<string, unknown> | null> {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(collection)}/${encodeURIComponent(documentId)}?key=${FIREBASE_API_KEY}`;
+  const response = await fetch(url);
+  if (response.status === 404) return null;
+  if (!response.ok) { console.error("Firestore error", response.status, await response.text()); throw new Error("No fue posible consultar el registro institucional."); }
+  const payload = await response.json();
+  return unwrap(payload.fields);
+}
+function clean(value: unknown): string { return String(value ?? "").trim(); }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -21,100 +43,73 @@ Deno.serve(async (req: Request) => {
   try {
     const { cedula } = await req.json();
     const cleanCedula = String(cedula ?? "").replace(/\D/g, "");
+    if (!/^\d{10}$/.test(cleanCedula)) return json(400, { error: "Ingresa una cédula válida de 10 dígitos." });
 
-    if (!/^\d{10}$/.test(cleanCedula)) {
-      return json(400, { error: "Ingresa una cédula válida de 10 dígitos." });
-    }
+    const student = await firestoreDocument("Estudiante", cleanCedula);
+    if (!student || student.eliminado === true) return json(401, { error: "La cédula no está habilitada para ingresar." });
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
+    const sourceCedula = clean(student.cedula || student.id || student.firebaseDocumentId);
+    if (sourceCedula !== cleanCedula) return json(401, { error: "La cédula no coincide con el registro institucional." });
+
+    const careerCode = clean(student.codigoCarreraActual);
+    const career = careerCode ? await firestoreDocument("carreras", careerCode) : null;
+    const careerIsUsable = Boolean(career && career.eliminado !== true && career.activo !== false);
+    const careerName = (careerIsUsable ? clean(career?.nombreCarrera) : "") || clean(student.nombreCarreraActual) || "Sin carrera registrada";
+    const fullName = clean(student.nombres) || "Estudiante";
+    const institutionalEmail = clean(student.correoInstitucional);
+    const personalEmail = clean(student.correoPersonal);
+    const phone = clean(student.celular);
+    const campus = clean(student.sede);
+
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: student, error: studentError } = await admin
-      .from("students")
-      .select("identification,full_name,personal_email,institutional_email,active")
-      .eq("identification", cleanCedula)
-      .eq("active", true)
-      .maybeSingle();
+    const { error: cacheError } = await admin.from("students").upsert({
+      identification: cleanCedula, full_name: fullName, career_code: careerCode || null, career_name: careerName,
+      personal_email: personalEmail || null, institutional_email: institutionalEmail || null, phone: phone || null,
+      campus: campus || null, active: true, updated_at: new Date().toISOString(),
+    }, { onConflict: "identification" });
+    if (cacheError) console.error("Student cache sync", cacheError);
 
-    if (studentError) throw studentError;
-    if (!student) return json(401, { error: "La cédula no está habilitada para ingresar." });
-
-    let { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .select("id,email,full_name,cedula,role")
-      .eq("cedula", cleanCedula)
-      .maybeSingle();
-
+    let { data: profile, error: profileError } = await admin.from("profiles").select("id,email,full_name,cedula,role").eq("cedula", cleanCedula).maybeSingle();
     if (profileError) throw profileError;
 
     let email = profile?.email?.trim() || "";
     let userId = profile?.id || "";
 
     if (!profile) {
-      email =
-        String(student.institutional_email ?? "").trim() ||
-        String(student.personal_email ?? "").trim() ||
-        `${cleanCedula}@plagguard.itsqmet.local`;
-
+      email = institutionalEmail || personalEmail || `${cleanCedula}@students.itsqmet.edu.ec`;
       let createdUserId = "";
       const { data: created, error: createError } = await admin.auth.admin.createUser({
-        email,
-        email_confirm: true,
-        user_metadata: {
-          full_name: String(student.full_name ?? "").trim(),
-          cedula: cleanCedula,
-        },
+        email, email_confirm: true,
+        user_metadata: { full_name: fullName, cedula: cleanCedula, career_code: careerCode, career_name: careerName, campus },
       });
-
       if (createError) {
         const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
         if (listError) throw listError;
         const existing = listed.users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
         if (!existing) throw createError;
         createdUserId = existing.id;
-      } else {
-        createdUserId = created.user.id;
-      }
+      } else createdUserId = created.user.id;
 
       userId = createdUserId;
-
-      const { error: upsertError } = await admin
-        .from("profiles")
-        .upsert({
-          id: userId,
-          email,
-          full_name: String(student.full_name ?? "").trim(),
-          role: "student",
-          cedula: cleanCedula,
-        }, { onConflict: "id" });
-
+      const { error: upsertError } = await admin.from("profiles").upsert({
+        id: userId, email, full_name: fullName, role: "student", cedula: cleanCedula,
+      }, { onConflict: "id" });
       if (upsertError) throw upsertError;
-    } else if (profile.role !== "student") {
-      return json(403, { error: "Este acceso es exclusivo para estudiantes." });
+    } else {
+      if (profile.role !== "student") return json(403, { error: "Este acceso es exclusivo para estudiantes." });
+      const { error: syncProfileError } = await admin.from("profiles").update({ full_name: fullName, cedula: cleanCedula }).eq("id", profile.id);
+      if (syncProfileError) throw syncProfileError;
     }
 
-    const { data: link, error: linkError } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-    });
-
+    const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email });
     if (linkError) throw linkError;
-
     const tokenHash = link.properties?.hashed_token;
     if (!tokenHash) throw new Error("No fue posible generar la sesión.");
 
-    return json(200, {
-      token_hash: tokenHash,
-      email,
-      student: {
-        id: userId,
-        full_name: String(student.full_name ?? "").trim(),
-        cedula: cleanCedula,
-      },
-    });
+    return json(200, { token_hash: tokenHash, student: { id: userId, cedula: cleanCedula, full_name: fullName, career_code: careerCode, career_name: careerName, campus } });
   } catch (error) {
     console.error(error);
     return json(500, { error: "No fue posible iniciar sesión. Intenta nuevamente." });
