@@ -118,7 +118,7 @@ export async function createOriginalSignedUrl(storagePath: string): Promise<stri
 }
 
 interface UploadDocumentInput {
-  title: string;
+  title?: string;
   file: File;
   documentId?: string;
   ownerId?: string;
@@ -235,15 +235,27 @@ async function resolveAcademicContext(input: UploadDocumentInput, currentUserId:
   };
 }
 
+function automaticDocumentTitle(file: File, explicitTitle?: string): string {
+  const provided = explicitTitle?.trim();
+  if (provided) return provided.slice(0, 240);
+
+  const fromFile = file.name
+    .replace(/\.(pdf|docx)$/i, '')
+    .replace(/^art[ií]culo\s+acad[eé]mico[\s_-]*/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return (fromFile || 'Artículo académico').slice(0, 240);
+}
+
 export async function uploadDocumentVersion(input: UploadDocumentInput): Promise<{ documentId: string; versionNumber: number }> {
-  const { title, file, documentId, onProgress } = input;
+  const { file, documentId, onProgress } = input;
   const client = requireClient();
   onProgress?.('validating');
   validateFile(file);
 
-  const cleanTitle = title.trim();
-  if (!cleanTitle) throw new Error('Escribe el título del trabajo.');
-  if (cleanTitle.length > 240) throw new Error('El título no puede superar 240 caracteres.');
+  const cleanTitle = automaticDocumentTitle(file, input.title);
 
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) throw new Error('La sesión no es válida. Vuelve a iniciar sesión.');

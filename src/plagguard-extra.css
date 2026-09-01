@@ -324,3 +324,63 @@ body, .plagguard-layout { background: var(--itsqmet-bg); color: var(--itsqmet-na
 .student-welcome h1 {
   text-transform: none;
 }
+
+
+/* Modal de carga compacto: sin campo de título y sin scroll en escritorio */
+.upload-modal {
+  width: min(100%, 610px);
+  max-height: calc(100vh - 24px);
+  overflow: visible;
+  padding: 20px 22px 18px;
+  border-radius: 17px;
+}
+.upload-modal .modal-heading h2 {
+  font-size: 23px;
+}
+.upload-modal .eyebrow {
+  margin-bottom: 8px;
+}
+.upload-modal .upload-note {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  gap: 2px;
+  line-height: 1.35;
+}
+.upload-modal .file-picker {
+  min-height: 112px;
+  margin-top: 12px;
+  padding: 16px 20px;
+  border-radius: 13px;
+}
+.upload-modal .file-picker-icon {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 2px;
+  border-radius: 10px;
+  font-size: 18px;
+}
+.upload-modal .modal-actions {
+  margin-top: 13px;
+  padding-top: 13px;
+}
+.upload-modal .processing-line {
+  margin-top: 10px;
+}
+.upload-modal .alert {
+  margin-top: 10px;
+}
+.upload-modal .compact-trace-note {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.upload-modal .compact-trace-note strong {
+  flex: 0 0 auto;
+}
+@media (max-height: 650px), (max-width: 650px) {
+  .upload-modal {
+    max-height: calc(100vh - 20px);
+    overflow: auto;
+  }
+}

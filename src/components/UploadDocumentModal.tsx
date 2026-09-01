@@ -22,7 +22,6 @@ const progressText: Record<UploadProgressStep, string> = {
 
 export function UploadDocumentModal({ open, document, onClose, onUploaded }: UploadDocumentModalProps): React.JSX.Element | null {
   const { profile } = useAuth();
-  const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<UploadProgressStep | null>(null);
@@ -36,7 +35,6 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
 
   useEffect(() => {
     if (!open) return;
-    setTitle(document?.title ?? '');
     setFile(null);
     setError(null);
     setStep(null);
@@ -107,7 +105,6 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
     setError(null);
     try {
       await uploadDocumentVersion({
-        title,
         file,
         documentId: document?.id,
         ownerId: activeTarget?.studentId ?? (!isStaff ? profile?.id : undefined),
@@ -165,11 +162,6 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
             </div>
           )}
 
-          <label className="field-label">
-            Título del artículo
-            <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={240} disabled={busy || Boolean(document)} placeholder="Título del artículo académico" />
-          </label>
-
           <label className="file-picker">
             <input
               type="file"
@@ -182,9 +174,9 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
             <small>{fileHint}</small>
           </label>
 
-          <div className="upload-note">
+          <div className="upload-note compact-trace-note">
             <strong>PlagGuard conserva la trazabilidad</strong>
-            <span>El artículo se almacena de forma privada, se calcula SHA-256 y cada corrección queda como una versión independiente.</span>
+            <span>Archivo privado · SHA-256 · historial de versiones.</span>
           </div>
 
           {step && <div className="processing-line"><span className={step === 'done' ? 'tiny-check' : 'mini-spinner'} />{progressText[step]}</div>}
