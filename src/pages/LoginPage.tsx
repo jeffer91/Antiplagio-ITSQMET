@@ -10,10 +10,9 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageProps): React.JSX.Element {
-  const { signIn, signInStudent } = useAuth();
+  const { signInStudent, signInAdminPin } = useAuth();
   const [cedula, setCedula] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [fullName, setFullName] = useState('');
   const [activationCode, setActivationCode] = useState('');
   const [bootstrapMode, setBootstrapMode] = useState(false);
@@ -28,14 +27,17 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
     setMessage(null);
 
     try {
+      const cleanCedula = cedula.replace(/\D/g, '');
+
       if (!adminAccess) {
-        const cleanCedula = cedula.replace(/\D/g, '');
         if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
         await signInStudent(cleanCedula);
         return;
       }
 
-      if (!email.trim() || !password) throw new Error('Completa correo y contraseña.');
+      const cleanPin = pin.replace(/\D/g, '');
+      if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
+      if (!/^\d{4,6}$/.test(cleanPin)) throw new Error('Ingresa un PIN de 4 a 6 dígitos.');
 
       if (bootstrapMode) {
         if (!fullName.trim()) throw new Error('Escribe el nombre del administrador.');
@@ -43,14 +45,14 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
 
         await bootstrapFirstAdmin({
           fullName,
-          email,
-          password,
+          cedula: cleanCedula,
+          pin: cleanPin,
           code: activationCode,
         });
-        setMessage('Administrador inicial creado. Ingresando al panel…');
+        setMessage('Administrador inicial creado. Ingresando…');
       }
 
-      await signIn(email.trim(), password);
+      await signInAdminPin(cleanCedula, cleanPin);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible ingresar.');
     } finally {
@@ -61,7 +63,11 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
   return (
     <main className="student-login-page">
       <form className="student-login-card admin-login-card" onSubmit={(event) => void submit(event)}>
-        <img className="institutional-login-logo" src={ITSQMET_LOGO} alt="ITSQMET - Instituto Superior Tecnológico Quito Metropolitano" />
+        <img
+          className="institutional-login-logo"
+          src={ITSQMET_LOGO}
+          alt="ITSQMET - Instituto Superior Tecnológico Quito Metropolitano"
+        />
 
         <div className="student-login-heading">
           <span className="status-badge">{adminAccess ? 'Administración' : 'Estudiantes'}</span>
@@ -69,8 +75,8 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
           <p>
             {adminAccess
               ? bootstrapMode
-                ? 'Configuración disponible únicamente mientras no exista ningún Administrador.'
-                : 'Ingresa con la cuenta institucional de Administración.'
+                ? 'Configura una sola vez la cédula y el PIN del Administrador.'
+                : 'Ingresa con tu cédula y PIN administrativo.'
               : 'Escribe los 10 dígitos de tu cédula.'}
           </p>
         </div>
@@ -81,62 +87,61 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
           </div>
         )}
 
-        {!adminAccess ? (
+        {adminAccess && bootstrapMode && (
           <label className="student-login-field">
-            Cédula
+            Nombre del administrador
             <input
               autoFocus
-              autoComplete="username"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={10}
-              value={cedula}
-              onChange={(event) => setCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="0102596566"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Nombre completo"
               required
             />
           </label>
-        ) : (
-          <>
-            {bootstrapMode && (
-              <label className="student-login-field">
-                Nombre del administrador
-                <input autoFocus value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Nombre completo" required />
-              </label>
-            )}
+        )}
 
-            <label className="student-login-field">
-              Correo electrónico
-              <input
-                autoFocus={!bootstrapMode}
-                autoComplete="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="correo@itsqmet.edu.ec"
-                required
-              />
-            </label>
+        <label className="student-login-field">
+          Cédula
+          <input
+            autoFocus={!bootstrapMode}
+            autoComplete="username"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={10}
+            value={cedula}
+            onChange={(event) => setCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
+            placeholder="0000000000"
+            required
+          />
+        </label>
 
-            <label className="student-login-field">
-              Contraseña
-              <input
-                autoComplete={bootstrapMode ? 'new-password' : 'current-password'}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={bootstrapMode ? 'Mínimo 8 caracteres' : 'Contraseña'}
-                required
-              />
-            </label>
+        {adminAccess && (
+          <label className="student-login-field">
+            PIN
+            <input
+              autoComplete="current-password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              type="password"
+              maxLength={6}
+              value={pin}
+              onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="••••"
+              required
+            />
+          </label>
+        )}
 
-            {bootstrapMode && (
-              <label className="student-login-field">
-                Código de activación inicial
-                <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder="Código de activación" required />
-              </label>
-            )}
-          </>
+        {adminAccess && bootstrapMode && (
+          <label className="student-login-field">
+            Código de activación inicial
+            <input
+              value={activationCode}
+              onChange={(event) => setActivationCode(event.target.value)}
+              placeholder="Código de activación"
+              required
+            />
+          </label>
         )}
 
         {error && <div className="alert error-alert">{error}</div>}
@@ -157,14 +162,28 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
                 setMessage(null);
               }}
             >
-              {bootstrapMode ? 'Ya tengo una cuenta Administrador' : 'Primera configuración: crear Administrador'}
+              {bootstrapMode ? 'Ya tengo acceso administrativo' : 'Primera configuración'}
             </button>
-            <button className="text-button student-access-switch secondary-link" type="button" onClick={() => { window.location.hash = ''; setError(null); }}>
+            <button
+              className="text-button student-access-switch secondary-link"
+              type="button"
+              onClick={() => {
+                window.location.hash = '';
+                setError(null);
+              }}
+            >
               Volver al acceso de estudiantes
             </button>
           </>
         ) : (
-          <button className="text-button student-access-switch" type="button" onClick={() => { window.location.hash = '/admin'; setError(null); }}>
+          <button
+            className="text-button student-access-switch"
+            type="button"
+            onClick={() => {
+              window.location.hash = '/admin';
+              setError(null);
+            }}
+          >
             Acceso administrativo
           </button>
         )}
