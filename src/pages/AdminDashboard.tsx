@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/AppShell';
 import {
   adminAssignStudent,
-  adminCreatePeriod,
   adminSetPeriodState,
   adminSetProfileRole,
   loadAdminOverview,
@@ -30,7 +29,6 @@ export function AdminDashboard(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [newPeriodName, setNewPeriodName] = useState('');
   const [studentId, setStudentId] = useState('');
   const [periodId, setPeriodId] = useState('');
   const [career, setCareer] = useState('');
@@ -72,17 +70,6 @@ export function AdminDashboard(): React.JSX.Element {
     } finally {
       setBusy(false);
     }
-  };
-
-  const createPeriod = async (): Promise<void> => {
-    if (!newPeriodName.trim()) {
-      setError('Escribe el nombre del periodo.');
-      return;
-    }
-    await run(async () => {
-      await adminCreatePeriod(newPeriodName.trim());
-      setNewPeriodName('');
-    }, 'Periodo creado con 20 % y 3 intentos Ordinario + 3 Supletorio.');
   };
 
   const chooseStudent = async (value: string): Promise<void> => {
@@ -141,23 +128,31 @@ export function AdminDashboard(): React.JSX.Element {
         <>
           <section className="admin-grid">
             <article className="panel-card" id="admin-periodos">
-              <div className="section-heading"><div><span className="eyebrow dark">Periodos</span><h2>Apertura de procesos</h2></div></div>
-              <div className="inline-form">
-                <input value={newPeriodName} onChange={(event) => setNewPeriodName(event.target.value)} placeholder="Ej. Abril 2026 – Septiembre 2026" disabled={busy} />
-                <button className="primary-button compact" type="button" onClick={() => void createPeriod()} disabled={busy}>Crear periodo</button>
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow dark">Periodos</span>
+                  <h2>Periodos institucionales</h2>
+                  <p className="muted-copy">Fuente automática: Firebase UTET · colección <strong>periodos</strong>. No se crean ni editan manualmente en PlagGuard.</p>
+                </div>
               </div>
               <div className="admin-list">
                 {periods.map((period) => (
                   <div className="admin-row" key={period.id}>
-                    <div><strong>{period.name}</strong><span>{period.similarity_limit.toFixed(0)} % · {period.ordinary_attempts} Ordinario + {period.supplementary_attempts} Supletorio</span></div>
+                    <div>
+                      <strong>{period.name}</strong>
+                      <span>
+                        {period.firebase_period_id ? `${period.firebase_period_id} · ` : ''}
+                        {period.active ? 'Activo en Firebase' : 'Inactivo en Firebase'}
+                        {' · '}{period.similarity_limit.toFixed(0)} % · {period.ordinary_attempts} Ordinario + {period.supplementary_attempts} Supletorio
+                      </span>
+                    </div>
                     <div className="admin-actions">
-                      <label><input type="checkbox" checked={period.ordinary_open} onChange={(event) => void run(() => adminSetPeriodState(period.id, event.target.checked, period.supplementary_open, period.active), 'Estado del periodo actualizado.')} disabled={busy} /> Ordinario</label>
-                      <label><input type="checkbox" checked={period.supplementary_open} onChange={(event) => void run(() => adminSetPeriodState(period.id, period.ordinary_open, event.target.checked, period.active), event.target.checked ? 'Supletorio abierto.' : 'Supletorio cerrado.')} disabled={busy} /> Supletorio</label>
-                      <label><input type="checkbox" checked={period.active} onChange={(event) => void run(() => adminSetPeriodState(period.id, period.ordinary_open, period.supplementary_open, event.target.checked), 'Estado del periodo actualizado.')} disabled={busy} /> Activo</label>
+                      <label><input type="checkbox" checked={period.ordinary_open} onChange={(event) => void run(() => adminSetPeriodState(period.id, event.target.checked, period.supplementary_open, period.active), 'Estado de Ordinario actualizado.')} disabled={busy || !period.active} /> Ordinario</label>
+                      <label><input type="checkbox" checked={period.supplementary_open} onChange={(event) => void run(() => adminSetPeriodState(period.id, period.ordinary_open, event.target.checked, period.active), event.target.checked ? 'Supletorio abierto.' : 'Supletorio cerrado.')} disabled={busy || !period.active} /> Supletorio</label>
                     </div>
                   </div>
                 ))}
-                {periods.length === 0 && <p className="muted-copy">Todavía no existen periodos.</p>}
+                {periods.length === 0 && <p className="muted-copy">No se encontraron periodos activos en Firebase UTET.</p>}
               </div>
             </article>
 
