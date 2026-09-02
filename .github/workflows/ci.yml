@@ -29,5 +29,13 @@ jobs:
         with:
           deno-version: v2.x
           cache: true
-      - name: Check Edge Functions
-        run: deno check supabase/functions/external-similarity/index.ts supabase/functions/citation-integrity/index.ts supabase/functions/ai-writing-indicators/index.ts
+      - name: Check all Edge Functions
+        run: |
+          deno check supabase/functions/student-cedula-login/index.ts
+          deno check supabase/functions/admin-pin-login/index.ts
+          deno check supabase/functions/bootstrap-admin/index.ts
+          deno check supabase/functions/bootstrap-admin-pin/index.ts
+          deno check supabase/functions/sync-firebase-periods/index.ts
+          deno check supabase/functions/external-similarity/index.ts
+          deno check supabase/functions/citation-integrity/index.ts
+          deno check supabase/functions/ai-writing-indicators/index.ts
