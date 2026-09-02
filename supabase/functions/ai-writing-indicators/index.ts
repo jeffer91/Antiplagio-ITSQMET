@@ -447,12 +447,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const { data: userData, error: userError } = await client.auth.getUser();
     if (userError || !userData.user) return jsonResponse({ error: 'Sesión no válida' }, 401);
 
-    const { data: isCoordinator, error: roleError } = await client.rpc('is_coordinator');
-    if (roleError || !isCoordinator) return jsonResponse({ error: 'Solo el coordinador puede ejecutar este análisis' }, 403);
-
     const body = asRecord(await request.json());
     const targetVersionId = asString(body.target_version_id);
     if (!targetVersionId) return jsonResponse({ error: 'Falta target_version_id' }, 400);
+
+    const { data: canAnalyze, error: accessError } = await client.rpc('can_analyze_version', {
+      p_version_id: targetVersionId,
+    });
+    if (accessError || !canAnalyze) {
+      return jsonResponse({ error: 'No tienes acceso para analizar esta versión' }, 403);
+    }
 
     const { data: targetRow, error: targetError } = await client
       .from('document_versions')
