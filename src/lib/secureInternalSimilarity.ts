@@ -17,7 +17,7 @@ export async function runSecureInternalSimilarityAnalysis(version: DocumentVersi
   const { data, error } = await client.rpc('run_internal_similarity_secure', {
     p_target_version_id: version.id,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message || 'No fue posible ejecutar la comparación institucional.');
 
   const analysisId = typeof data === 'string' ? data : String(data ?? '');
   if (!analysisId) throw new Error('No fue posible registrar la comparación institucional.');
