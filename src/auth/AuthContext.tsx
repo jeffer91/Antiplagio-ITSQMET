@@ -69,10 +69,18 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
     } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
 
+      // Mantén el perfil actual durante TOKEN_REFRESHED y otros eventos de la
+      // misma sesión. Antes se borraba el perfil y se activaba el loading en
+      // cada evento de Auth; como el efecto del perfil depende del user.id,
+      // un refresh del token del mismo usuario podía dejar la app cargando
+      // indefinidamente y cerrar visualmente cualquier modal abierto.
       setSession(nextSession);
-      setProfile(null);
-      setProfileError(null);
-      setLoading(Boolean(nextSession));
+
+      if (!nextSession) {
+        setProfile(null);
+        setProfileError(null);
+        setLoading(false);
+      }
     });
 
     return () => {
@@ -121,8 +129,15 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
       setProfileError(null);
     };
 
+    const safetyTimer = window.setTimeout(() => {
+      if (!active) return;
+      setProfileError('La sesión está activa, pero la carga del perfil tardó demasiado. Recarga la página e inténtalo nuevamente.');
+      setLoading(false);
+    }, 12000);
+
     const timer = window.setTimeout(() => {
       void loadProfile().finally(() => {
+        window.clearTimeout(safetyTimer);
         if (active) setLoading(false);
       });
     }, 0);
@@ -130,6 +145,7 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
     return () => {
       active = false;
       window.clearTimeout(timer);
+      window.clearTimeout(safetyTimer);
     };
   }, [session?.user.id]);
 
