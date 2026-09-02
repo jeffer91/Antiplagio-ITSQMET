@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { CoordinatorDashboard } from './pages/CoordinatorDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
 import { StudentDashboard } from './pages/StudentDashboard';
@@ -36,13 +35,13 @@ function useHashPath(): string {
   const [hash, setHash] = useState(() => window.location.hash);
 
   useEffect(() => {
+    const onHashChange = (): void => setHash(window.location.hash || '#/student');
+    window.addEventListener('hashchange', onHashChange);
+
     if (!window.location.hash) {
       window.location.hash = '/student';
-      return;
     }
 
-    const onHashChange = (): void => setHash(window.location.hash);
-    window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
@@ -56,7 +55,6 @@ function AppContent(): React.JSX.Element {
 
   const adminRoute = hash === '#/admin';
   const studentRoute = hash === '#/student';
-  const coordinatorRoute = hash === '#/coordinator';
 
   useEffect(() => {
     if (loading || !session || !profile) {
@@ -66,8 +64,7 @@ function AppContent(): React.JSX.Element {
 
     const incompatibleSession =
       (adminRoute && profile.role !== 'admin')
-      || (studentRoute && profile.role !== 'student')
-      || (coordinatorRoute && profile.role !== 'coordinator');
+      || (studentRoute && profile.role !== 'student');
 
     if (!incompatibleSession) {
       setSwitchingAccess(false);
@@ -86,7 +83,7 @@ function AppContent(): React.JSX.Element {
     return () => {
       active = false;
     };
-  }, [adminRoute, coordinatorRoute, loading, profile, session, signOut, studentRoute]);
+  }, [adminRoute, loading, profile, session, signOut, studentRoute]);
 
   if (!isSupabaseConfigured) return <SetupPage />;
   if (loading || switchingAccess) {
@@ -99,14 +96,6 @@ function AppContent(): React.JSX.Element {
     if (profile.role === 'admin') return <AdminDashboard />;
     return <LoadingScreen message="Cambiando al acceso administrativo…" />;
   }
-
-  if (coordinatorRoute) {
-    if (!session) return <LoginPage adminAccess />;
-    if (!profile) return <ProfileProblem />;
-    if (profile.role === 'coordinator') return <CoordinatorDashboard />;
-    return <LoadingScreen message="Cambiando al acceso de coordinación…" />;
-  }
-
   // La ruta estudiantil es totalmente independiente de Administración.
   // Si existía una sesión administrativa, se cierra antes de mostrar este acceso.
   if (studentRoute) {
