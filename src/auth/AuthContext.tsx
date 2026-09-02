@@ -92,8 +92,18 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
+
+      // Evita mezclar el perfil de la sesión anterior con la nueva sesión.
+      // Esto es crítico al cambiar entre /admin y /student en el mismo navegador.
+      setLoading(true);
+      setProfile(null);
+      setProfileError(null);
       setSession(nextSession);
-      void loadProfile(nextSession);
+
+      void loadProfile(nextSession)
+        .finally(() => {
+          if (active) setLoading(false);
+        });
     });
 
     return () => {
