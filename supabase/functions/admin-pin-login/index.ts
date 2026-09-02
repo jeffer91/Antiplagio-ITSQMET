@@ -31,10 +31,10 @@ function json(req: Request, status: number, body: Record<string, unknown>) {
   });
 }
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): ArrayBuffer {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i += 1) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return bytes;
+  return bytes.buffer as ArrayBuffer;
 }
 
 function bytesToHex(bytes: ArrayBuffer): string {
