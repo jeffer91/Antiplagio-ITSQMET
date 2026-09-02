@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ITSQMET_LOGO } from '../assets/itsqmetLogo';
+import { switchAccessSurface } from '../lib/supabase';
 import type { AppRole } from '../types/auth';
 
 interface LoginPageProps {
@@ -32,7 +33,6 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
       const cleanPin = pin.replace(/\D/g, '');
       if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
       if (!/^\d{4,6}$/.test(cleanPin)) throw new Error('Ingresa un PIN de 4 a 6 dígitos.');
-
       await signInAdminPin(cleanCedula, cleanPin);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible ingresar.');
@@ -56,9 +56,9 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
           <p>{adminAccess ? 'Ingresa con tu cédula y PIN.' : 'Escribe los 10 dígitos de tu cédula.'}</p>
         </div>
 
-        {adminAccess && activeRole && activeRole !== 'admin' && (
+        {activeRole && (
           <div className="admin-session-note">
-            Hay una sesión de {activeRole === 'student' ? 'estudiante' : 'coordinador'} abierta. Al ingresar aquí se cambiará a la sesión administrativa.
+            Esta ruta utiliza una sesión independiente. Ingresa con las credenciales correspondientes.
           </div>
         )}
 
@@ -101,25 +101,11 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
         </button>
 
         {adminAccess ? (
-          <button
-            className="text-button student-access-switch secondary-link"
-            type="button"
-            onClick={() => {
-              window.location.hash = '/student';
-              setError(null);
-            }}
-          >
-            Volver al acceso de estudiantes
+          <button className="text-button student-access-switch secondary-link" type="button" onClick={() => switchAccessSurface('student')}>
+            Ir al acceso de estudiantes
           </button>
         ) : (
-          <button
-            className="text-button student-access-switch"
-            type="button"
-            onClick={() => {
-              window.location.hash = '/admin';
-              setError(null);
-            }}
-          >
+          <button className="text-button student-access-switch" type="button" onClick={() => switchAccessSurface('admin')}>
             Acceso administrativo
           </button>
         )}
