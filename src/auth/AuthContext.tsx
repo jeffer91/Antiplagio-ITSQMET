@@ -29,6 +29,10 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // La suscripción de Auth SOLO sincroniza la sesión.
+  // No se hacen consultas a Supabase dentro de onAuthStateChange porque el
+  // cliente mantiene un lock interno durante ese callback y una consulta
+  // adicional puede bloquear el login varios segundos.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
@@ -38,19 +42,65 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
     const client = supabase;
     let active = true;
 
-    const loadProfile = async (currentSession: Session | null): Promise<void> => {
-      if (!currentSession) {
-        if (active) {
-          setProfile(null);
-          setProfileError(null);
-        }
+    const initialize = async (): Promise<void> => {
+      const { data, error } = await client.auth.getSession();
+      if (!active) return;
+
+      if (error) {
+        setSession(null);
+        setProfile(null);
+        setProfileError(error.message);
+        setLoading(false);
         return;
       }
 
+      setSession(data.session);
+      if (!data.session) {
+        setProfile(null);
+        setProfileError(null);
+        setLoading(false);
+      }
+    };
+
+    void initialize();
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return;
+
+      setSession(nextSession);
+      setProfile(null);
+      setProfileError(null);
+      setLoading(Boolean(nextSession));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // El perfil se carga fuera de onAuthStateChange para evitar el lock de Auth.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    if (!session) {
+      setProfile(null);
+      setProfileError(null);
+      setLoading(false);
+      return;
+    }
+
+    const client = supabase;
+    let active = true;
+    setLoading(true);
+
+    const loadProfile = async (): Promise<void> => {
       const { data, error } = await client
         .from('profiles')
         .select('id,email,full_name,role,cedula,created_at')
-        .eq('id', currentSession.user.id)
+        .eq('id', session.user.id)
         .maybeSingle();
 
       if (!active) return;
@@ -71,46 +121,17 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
       setProfileError(null);
     };
 
-    const initialize = async (): Promise<void> => {
-      const { data, error } = await client.auth.getSession();
-      if (!active) return;
-
-      if (error) {
-        setProfileError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      setSession(data.session);
-      await loadProfile(data.session);
-      if (active) setLoading(false);
-    };
-
-    void initialize();
-
-    const {
-      data: { subscription },
-    } = client.auth.onAuthStateChange((_event, nextSession) => {
-      if (!active) return;
-
-      // Evita mezclar el perfil de la sesión anterior con la nueva sesión.
-      // Esto es crítico al cambiar entre /admin y /student en el mismo navegador.
-      setLoading(true);
-      setProfile(null);
-      setProfileError(null);
-      setSession(nextSession);
-
-      void loadProfile(nextSession)
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    });
+    const timer = window.setTimeout(() => {
+      void loadProfile().finally(() => {
+        if (active) setLoading(false);
+      });
+    }, 0);
 
     return () => {
       active = false;
-      subscription.unsubscribe();
+      window.clearTimeout(timer);
     };
-  }, []);
+  }, [session?.user.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -142,11 +163,17 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
         const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
         if (!tokenHash) throw new Error('No fue posible iniciar la sesión.');
 
-        const { error: verifyError } = await supabase.auth.verifyOtp({
+        const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: 'magiclink',
         });
         if (verifyError) throw verifyError;
+
+        // Refuerzo explícito: no dependemos únicamente del evento de Auth.
+        if (verified.session) {
+          setSession(verified.session);
+          setLoading(true);
+        }
       },
       signInAdminPin: async (cedula, pin) => {
         if (!supabase) throw new Error('Supabase no está configurado.');
@@ -172,16 +199,25 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
         const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
         if (!tokenHash) throw new Error('No fue posible iniciar la sesión administrativa.');
 
-        const { error: verifyError } = await supabase.auth.verifyOtp({
+        const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: 'magiclink',
         });
         if (verifyError) throw verifyError;
+
+        if (verified.session) {
+          setSession(verified.session);
+          setLoading(true);
+        }
       },
       signOut: async () => {
         if (!supabase) return;
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
         if (error) throw error;
+        setSession(null);
+        setProfile(null);
+        setProfileError(null);
+        setLoading(false);
       },
     }),
     [loading, profile, profileError, session],
