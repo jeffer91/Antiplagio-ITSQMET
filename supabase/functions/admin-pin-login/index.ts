@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
     if (!/^\d{10}$/.test(cedula)) return json(req, 400, { error: "Ingresa una cédula válida de 10 dígitos." });
     if (!/^\d{4,6}$/.test(pin)) return json(req, 400, { error: "Ingresa un PIN válido." });
 
-    const admin = createClient(
+    const admin: any = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false, autoRefreshToken: false } },
