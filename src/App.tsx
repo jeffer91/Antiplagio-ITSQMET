@@ -7,11 +7,11 @@ import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
 import { StudentDashboard } from './pages/StudentDashboard';
 
-function LoadingScreen(): React.JSX.Element {
+function LoadingScreen({ message = 'Cargando PlagGuard…' }: { message?: string }): React.JSX.Element {
   return (
     <main className="center-page">
       <div className="loader" aria-label="Cargando" />
-      <p>Cargando PlagGuard…</p>
+      <p>{message}</p>
     </main>
   );
 }
@@ -24,7 +24,9 @@ function ProfileProblem(): React.JSX.Element {
         <span className="status-badge warning">Revisión requerida</span>
         <h1>No pudimos validar tu perfil</h1>
         <p>{profileError || 'El perfil de esta cuenta no está disponible.'}</p>
-        <button className="primary-button compact" type="button" onClick={() => void signOut()}>Cerrar sesión</button>
+        <button className="primary-button compact" type="button" onClick={() => void signOut()}>
+          Cerrar sesión
+        </button>
       </section>
     </main>
   );
@@ -32,44 +34,91 @@ function ProfileProblem(): React.JSX.Element {
 
 function useHashPath(): string {
   const [hash, setHash] = useState(() => window.location.hash);
+
   useEffect(() => {
+    if (!window.location.hash) {
+      window.location.hash = '/student';
+      return;
+    }
+
     const onHashChange = (): void => setHash(window.location.hash);
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
-  return hash;
+
+  return hash || '#/student';
 }
 
 function AppContent(): React.JSX.Element {
-  const { loading, session, profile } = useAuth();
+  const { loading, session, profile, signOut } = useAuth();
   const hash = useHashPath();
+  const [switchingAccess, setSwitchingAccess] = useState(false);
+
   const adminRoute = hash === '#/admin';
   const studentRoute = hash === '#/student';
+  const coordinatorRoute = hash === '#/coordinator';
+
+  useEffect(() => {
+    if (loading || !session || !profile) {
+      setSwitchingAccess(false);
+      return;
+    }
+
+    const incompatibleSession =
+      (adminRoute && profile.role !== 'admin')
+      || (studentRoute && profile.role !== 'student')
+      || (coordinatorRoute && profile.role !== 'coordinator');
+
+    if (!incompatibleSession) {
+      setSwitchingAccess(false);
+      return;
+    }
+
+    let active = true;
+    setSwitchingAccess(true);
+
+    void signOut()
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setSwitchingAccess(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [adminRoute, coordinatorRoute, loading, profile, session, signOut, studentRoute]);
 
   if (!isSupabaseConfigured) return <SetupPage />;
-  if (loading) return <LoadingScreen />;
+  if (loading || switchingAccess) {
+    return <LoadingScreen message="Preparando el acceso correcto…" />;
+  }
 
-  // El acceso administrativo es independiente del acceso estudiantil.
-  // Si hay una sesión de estudiante abierta, se sigue mostrando el login admin
-  // para permitir reemplazarla por una cuenta Administrador.
   if (adminRoute) {
-    if (session && profile?.role === 'admin') return <AdminDashboard />;
-    return <LoginPage adminAccess activeRole={profile?.role ?? null} />;
+    if (!session) return <LoginPage adminAccess />;
+    if (!profile) return <ProfileProblem />;
+    if (profile.role === 'admin') return <AdminDashboard />;
+    return <LoadingScreen message="Cambiando al acceso administrativo…" />;
   }
 
-  // Enlace exclusivo para estudiantes. Aunque haya una sesión administrativa
-  // abierta en el navegador, esta ruta muestra el acceso por cédula y permite
-  // reemplazar la sesión actual por la del estudiante.
+  if (coordinatorRoute) {
+    if (!session) return <LoginPage adminAccess />;
+    if (!profile) return <ProfileProblem />;
+    if (profile.role === 'coordinator') return <CoordinatorDashboard />;
+    return <LoadingScreen message="Cambiando al acceso de coordinación…" />;
+  }
+
+  // La ruta estudiantil es totalmente independiente de Administración.
+  // Si existía una sesión administrativa, se cierra antes de mostrar este acceso.
   if (studentRoute) {
-    if (session && profile?.role === 'student') return <StudentDashboard />;
-    return <LoginPage />;
+    if (!session) return <LoginPage />;
+    if (!profile) return <ProfileProblem />;
+    if (profile.role === 'student') return <StudentDashboard />;
+    return <LoadingScreen message="Cambiando al acceso de estudiantes…" />;
   }
 
-  if (!session) return <LoginPage />;
-  if (!profile) return <ProfileProblem />;
-  if (profile.role === 'admin') return <AdminDashboard />;
-  if (profile.role === 'coordinator') return <CoordinatorDashboard />;
-  return <StudentDashboard />;
+  // Cualquier ruta desconocida vuelve al acceso de estudiantes.
+  window.location.hash = '/student';
+  return <LoadingScreen />;
 }
 
 export default function App(): React.JSX.Element {
