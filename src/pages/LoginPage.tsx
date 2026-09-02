@@ -105,7 +105,7 @@ export function LoginPage({ adminAccess = false, activeRole = null }: LoginPageP
             className="text-button student-access-switch secondary-link"
             type="button"
             onClick={() => {
-              window.location.hash = '';
+              window.location.hash = '/student';
               setError(null);
             }}
           >
