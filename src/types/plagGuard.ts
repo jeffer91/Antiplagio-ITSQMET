@@ -17,6 +17,9 @@ export interface AcademicPeriod {
   ordinary_open: boolean;
   supplementary_open: boolean;
   active: boolean;
+  firebase_period_id?: string | null;
+  firebase_data_hash?: string | null;
+  firebase_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
