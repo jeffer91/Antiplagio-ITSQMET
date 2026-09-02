@@ -209,7 +209,7 @@ async function hashText(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function enforceRateLimit(admin: ReturnType<typeof createClient>, req: Request, cedula: string): Promise<string> {
+async function enforceRateLimit(admin: any, req: Request, cedula: string): Promise<string> {
   const forwarded = clean(req.headers.get("x-forwarded-for")).split(",")[0]?.trim() || "unknown";
   const rateKey = `student:${await hashText(`${forwarded}:${cedula}`)}`;
   const now = Date.now();
@@ -240,7 +240,7 @@ async function enforceRateLimit(admin: ReturnType<typeof createClient>, req: Req
   return rateKey;
 }
 
-async function clearRateLimit(admin: ReturnType<typeof createClient>, rateKey: string): Promise<void> {
+async function clearRateLimit(admin: any, rateKey: string): Promise<void> {
   await admin.from("auth_rate_limits").delete().eq("rate_key", rateKey);
 }
 
@@ -249,7 +249,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json(req, 405, { error: "Método no permitido." });
 
-  const admin = createClient(
+  const admin: any = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false, autoRefreshToken: false } },
