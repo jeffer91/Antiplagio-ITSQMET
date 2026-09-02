@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { isSupabaseConfigured } from './lib/supabase';
+import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
@@ -32,80 +32,47 @@ function ProfileProblem(): React.JSX.Element {
 }
 
 function useHashPath(): string {
-  const [hash, setHash] = useState(() => window.location.hash);
+  const [hash, setHash] = useState(() => window.location.hash || '#/student');
 
   useEffect(() => {
     const onHashChange = (): void => setHash(window.location.hash || '#/student');
     window.addEventListener('hashchange', onHashChange);
-
-    if (!window.location.hash) {
-      window.location.hash = '/student';
-    }
-
+    if (!window.location.hash) window.location.hash = '/student';
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  return hash || '#/student';
+  return hash;
 }
 
 function AppContent(): React.JSX.Element {
-  const { loading, session, profile, signOut } = useAuth();
+  const { loading, session, profile } = useAuth();
   const hash = useHashPath();
-  const [switchingAccess, setSwitchingAccess] = useState(false);
-
   const adminRoute = hash === '#/admin';
   const studentRoute = hash === '#/student';
 
   useEffect(() => {
-    if (loading || !session || !profile) {
-      setSwitchingAccess(false);
-      return;
+    if ((adminRoute && authSurface !== 'admin') || (studentRoute && authSurface !== 'student')) {
+      window.location.reload();
     }
-
-    const incompatibleSession =
-      (adminRoute && profile.role !== 'admin')
-      || (studentRoute && profile.role !== 'student');
-
-    if (!incompatibleSession) {
-      setSwitchingAccess(false);
-      return;
-    }
-
-    let active = true;
-    setSwitchingAccess(true);
-
-    void signOut()
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) setSwitchingAccess(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [adminRoute, loading, profile, session, signOut, studentRoute]);
+  }, [adminRoute, studentRoute]);
 
   if (!isSupabaseConfigured) return <SetupPage />;
-  if (loading || switchingAccess) {
-    return <LoadingScreen message="Preparando el acceso correcto…" />;
-  }
+  if (loading) return <LoadingScreen />;
 
   if (adminRoute) {
     if (!session) return <LoginPage adminAccess />;
     if (!profile) return <ProfileProblem />;
     if (profile.role === 'admin') return <AdminDashboard />;
-    return <LoadingScreen message="Cambiando al acceso administrativo…" />;
+    return <LoginPage adminAccess activeRole={profile.role} />;
   }
-  // La ruta estudiantil es totalmente independiente de Administración.
-  // Si existía una sesión administrativa, se cierra antes de mostrar este acceso.
+
   if (studentRoute) {
     if (!session) return <LoginPage />;
     if (!profile) return <ProfileProblem />;
     if (profile.role === 'student') return <StudentDashboard />;
-    return <LoadingScreen message="Cambiando al acceso de estudiantes…" />;
+    return <LoginPage activeRole={profile.role} />;
   }
 
-  // Cualquier ruta desconocida vuelve al acceso de estudiantes.
   window.location.hash = '/student';
   return <LoadingScreen />;
 }
