@@ -148,7 +148,13 @@ export function StudentDashboard(): React.JSX.Element {
       setCorrections(result.corrections);
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible completar el análisis.');
+      const detail =
+        caught instanceof Error
+          ? caught.message
+          : typeof caught === 'object' && caught !== null && 'message' in caught
+            ? String((caught as { message?: unknown }).message || 'No fue posible completar el análisis.')
+            : 'No fue posible completar el análisis.';
+      setError(detail);
     } finally {
       setAnalyzing(false);
       setAnalysisProgress('');
