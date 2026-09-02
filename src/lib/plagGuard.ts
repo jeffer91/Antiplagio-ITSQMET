@@ -35,6 +35,7 @@ export interface InstitutionalStudent {
   career_code: string | null;
   career_name: string | null;
   campus: string | null;
+  active: boolean;
 }
 
 export interface StudentCorrection {
@@ -55,6 +56,9 @@ export interface CompleteAnalysisResult {
 }
 
 export interface AdminOverview {
+  students: number;
+  activeProcesses: number;
+  pendingArticles: number;
   articles: number;
   attempts: number;
   complies: number;
@@ -97,7 +101,10 @@ export async function loadStudentCurrentResult(studentId?: string, periodId?: st
 export async function loadAdminOverview(): Promise<AdminOverview> {
   const client = requireClient();
 
-  const [articles, attempts, complies, doesNotComply, repository] = await Promise.all([
+  const [students, activeProcesses, pendingArticles, articles, attempts, complies, doesNotComply, repository] = await Promise.all([
+    client.from('students').select('identification', { count: 'exact', head: true }).eq('active', true),
+    client.from('student_enrollments').select('id', { count: 'exact', head: true }).eq('active', true),
+    client.from('documents').select('id', { count: 'exact', head: true }).is('academic_period_id', null),
     client.from('documents').select('id', { count: 'exact', head: true }),
     client.from('analysis_attempts').select('id', { count: 'exact', head: true }),
     client.from('analysis_attempts').select('id', { count: 'exact', head: true }).eq('status', 'complies'),
@@ -105,11 +112,14 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
     client.from('institutional_repository').select('id', { count: 'exact', head: true }).eq('active', true),
   ]);
 
-  for (const response of [articles, attempts, complies, doesNotComply, repository]) {
+  for (const response of [students, activeProcesses, pendingArticles, articles, attempts, complies, doesNotComply, repository]) {
     if (response.error) throw response.error;
   }
 
   return {
+    students: students.count ?? 0,
+    activeProcesses: activeProcesses.count ?? 0,
+    pendingArticles: pendingArticles.count ?? 0,
     articles: articles.count ?? 0,
     attempts: attempts.count ?? 0,
     complies: complies.count ?? 0,
@@ -162,11 +172,23 @@ export async function loadInstitutionalStudent(identification: string): Promise<
   const client = requireClient();
   const { data, error } = await client
     .from('students')
-    .select('identification,full_name,career_code,career_name,campus')
+    .select('identification,full_name,career_code,career_name,campus,active')
     .eq('identification', identification)
     .maybeSingle();
   if (error) throw error;
   return data ? data as InstitutionalStudent : null;
+}
+
+export async function loadInstitutionalStudents(): Promise<InstitutionalStudent[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('students')
+    .select('identification,full_name,career_code,career_name,campus,active')
+    .eq('active', true)
+    .order('full_name', { ascending: true })
+    .limit(1000);
+  if (error) throw error;
+  return (data ?? []) as InstitutionalStudent[];
 }
 
 export async function attachPendingDocumentToCurrentProcess(documentId: string): Promise<void> {
@@ -181,7 +203,7 @@ export async function loadEnrollments(): Promise<StudentEnrollment[]> {
   const client = requireClient();
   const { data, error } = await client
     .from('student_enrollments')
-    .select('id,student_id,period_id,career,modality,active,created_at,updated_at')
+    .select('id,student_id,period_id,career,modality,active,source,firebase_matricula_id,firebase_updated_at,created_at,updated_at')
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as StudentEnrollment[];
