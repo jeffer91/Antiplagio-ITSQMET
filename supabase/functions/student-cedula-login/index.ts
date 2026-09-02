@@ -331,7 +331,7 @@ Deno.serve(async (req: Request) => {
       if (createError) {
         const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
         if (listError) throw listError;
-        const existing = listed.users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
+        const existing = listed.users.find((user: { id: string; email?: string | null }) => user.email?.toLowerCase() === email.toLowerCase());
 
         if (existing) {
           const { data: existingProfile } = await admin
@@ -388,8 +388,9 @@ Deno.serve(async (req: Request) => {
 
     const sourceForPeriod = matricula ?? student;
     const entries = flatten(sourceForPeriod);
-    const activePeriods = periodRows ?? [];
-    let period = activePeriods.find((candidate) =>
+    type PeriodRow = { id: string; name: string; firebase_period_id: string | null; active: boolean };
+    const activePeriods = (periodRows ?? []) as PeriodRow[];
+    let period = activePeriods.find((candidate: PeriodRow) =>
       entries.some(({ path, value }) =>
         /period/.test(path)
         && (
@@ -401,7 +402,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!period) {
-      period = activePeriods.find((candidate) =>
+      period = activePeriods.find((candidate: PeriodRow) =>
         entries.some(({ value }) =>
           clean(value) === clean(candidate.firebase_period_id)
           || clean(value) === clean(candidate.name)
