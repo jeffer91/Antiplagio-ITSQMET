@@ -44,6 +44,7 @@ function AppContent(): React.JSX.Element {
   const { loading, session, profile } = useAuth();
   const hash = useHashPath();
   const adminRoute = hash === '#/admin';
+  const studentRoute = hash === '#/student';
 
   if (!isSupabaseConfigured) return <SetupPage />;
   if (loading) return <LoadingScreen />;
@@ -54,6 +55,14 @@ function AppContent(): React.JSX.Element {
   if (adminRoute) {
     if (session && profile?.role === 'admin') return <AdminDashboard />;
     return <LoginPage adminAccess activeRole={profile?.role ?? null} />;
+  }
+
+  // Enlace exclusivo para estudiantes. Aunque haya una sesión administrativa
+  // abierta en el navegador, esta ruta muestra el acceso por cédula y permite
+  // reemplazar la sesión actual por la del estudiante.
+  if (studentRoute) {
+    if (session && profile?.role === 'student') return <StudentDashboard />;
+    return <LoginPage />;
   }
 
   if (!session) return <LoginPage />;
