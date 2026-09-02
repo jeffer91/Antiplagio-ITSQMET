@@ -120,11 +120,26 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
 
 export async function loadPeriods(): Promise<AcademicPeriod[]> {
   const client = requireClient();
+
+  // Firebase UTET es la fuente oficial de periodos. Antes de leerlos,
+  // sincronizamos la colección "periodos" con la tabla operativa de PlagGuard.
+  const { data: syncData, error: syncError } = await client.functions.invoke('sync-firebase-periods', {
+    body: {},
+  });
+
+  if (syncError) {
+    console.warn(
+      'No fue posible actualizar periodos desde Firebase:',
+      (syncData as { error?: string } | null)?.error || syncError.message,
+    );
+  }
+
   const { data, error } = await client
     .from('academic_periods')
-    .select('id,name,similarity_limit,ordinary_attempts,supplementary_attempts,ordinary_open,supplementary_open,active,created_at,updated_at')
-    .order('created_at', { ascending: false });
+    .select('id,name,similarity_limit,ordinary_attempts,supplementary_attempts,ordinary_open,supplementary_open,active,firebase_period_id,firebase_data_hash,firebase_updated_at,created_at,updated_at')
+    .order('name', { ascending: true });
   if (error) throw error;
+
   return (data ?? []).map((row) => ({
     ...(row as AcademicPeriod),
     similarity_limit: Number(row.similarity_limit),
