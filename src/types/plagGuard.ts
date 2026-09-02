@@ -31,6 +31,9 @@ export interface StudentEnrollment {
   career: string;
   modality: string;
   active: boolean;
+  source?: string;
+  firebase_matricula_id?: string | null;
+  firebase_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
