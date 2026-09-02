@@ -163,6 +163,14 @@ async function findStudent(cedula: string): Promise<UnknownRecord | null> {
     const found = results.find(Boolean);
     if (found) return found;
   }
+
+  // Último respaldo para importaciones antiguas donde la cédula quedó en
+  // otro campo o dentro de una estructura anidada.
+  for (const collection of STUDENT_COLLECTIONS) {
+    const scanned = await listCollectionForCedula(collection, cedula);
+    if (scanned) return scanned;
+  }
+
   return null;
 }
 
@@ -273,7 +281,34 @@ Deno.serve(async (req: Request) => {
       throw error;
     }
 
-    const student = await findStudent(cleanCedula);
+    let student = await findStudent(cleanCedula);
+
+    // El espejo local solo se usa como respaldo si Firebase no responde con
+    // un registro directo. Sus datos fueron sincronizados previamente desde UTET.
+    if (!student) {
+      const { data: cachedStudent } = await admin
+        .from("students")
+        .select("identification,full_name,career_code,career_name,institutional_email,personal_email,phone,campus,active")
+        .eq("identification", cleanCedula)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (cachedStudent) {
+        student = {
+          cedula: cachedStudent.identification,
+          nombres: cachedStudent.full_name,
+          codigoCarreraActual: cachedStudent.career_code,
+          nombreCarreraActual: cachedStudent.career_name,
+          correoInstitucional: cachedStudent.institutional_email,
+          correoPersonal: cachedStudent.personal_email,
+          celular: cachedStudent.phone,
+          sede: cachedStudent.campus,
+          activo: cachedStudent.active,
+          __source: "supabase_firebase_cache",
+        };
+      }
+    }
+
     if (!student || student.eliminado === true || student.activo === false) {
       return json(req, 401, { error: "La cédula no consta en los estudiantes habilitados de Firebase UTET." });
     }
