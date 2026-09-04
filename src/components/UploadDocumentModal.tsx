@@ -73,7 +73,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
   }, [document, isStaff, open, profile]);
 
   const fileHint = useMemo(() => {
-    if (!file) return 'PDF o DOCX · máximo 25 MB';
+    if (!file) return 'PDF con texto seleccionable o DOCX · máximo 25 MB';
     const megabytes = file.size / (1024 * 1024);
     return `${file.name} · ${megabytes.toFixed(megabytes >= 10 ? 0 : 1)} MB`;
   }, [file]);
@@ -116,6 +116,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
       await onUploaded();
       onClose();
     } catch (caught) {
+      setStep(null);
       const message =
         caught instanceof Error
           ? caught.message
@@ -182,7 +183,7 @@ export function UploadDocumentModal({ open, document, onClose, onUploaded }: Upl
 
           <div className="upload-note compact-trace-note">
             <strong>PlagGuard conserva la trazabilidad</strong>
-            <span>Archivo privado · SHA-256 · historial de versiones.</span>
+            <span>Archivo privado · SHA-256 · historial de versiones. Los PDF escaneados sin texto seleccionable no son compatibles.</span>
           </div>
 
           {step && <div className="processing-line"><span className={step === 'done' ? 'tiny-check' : 'mini-spinner'} />{progressText[step]}</div>}
