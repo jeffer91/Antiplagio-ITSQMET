@@ -4,7 +4,7 @@ import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
-import { StudentDashboard } from './pages/StudentDashboard';
+import { StudentDashboardV2 } from './pages/StudentDashboardV2';
 
 function LoadingScreen({ message = 'Cargando PlagGuard…' }: { message?: string }): React.JSX.Element {
   return (
@@ -69,7 +69,7 @@ function AppContent(): React.JSX.Element {
   if (studentRoute) {
     if (!session) return <LoginPage />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'student') return <StudentDashboard />;
+    if (profile.role === 'student') return <StudentDashboardV2 />;
     return <LoginPage activeRole={profile.role} />;
   }
 
