@@ -253,6 +253,15 @@ export async function uploadDocumentVersion(input: UploadDocumentInput): Promise
   onProgress?.('extracting');
   const extraction = await extractDocument(file);
 
+  if (extraction.status === 'needs_ocr') {
+    throw new Error(
+      'No se puede analizar este archivo. El PDF parece estar escaneado o contiene muy poco texto seleccionable. Sube un PDF con texto seleccionable o un archivo DOCX. PlagGuard no utiliza OCR.',
+    );
+  }
+  if (extraction.status === 'failed') {
+    throw new Error(extraction.error || 'No fue posible extraer el texto del archivo. Sube un PDF con texto seleccionable o un archivo DOCX.');
+  }
+
   onProgress?.('hashing');
   const hash = await sha256(file);
 
