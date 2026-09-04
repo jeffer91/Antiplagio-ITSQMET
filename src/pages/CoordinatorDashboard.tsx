@@ -61,7 +61,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <article className="metric-card"><span>Trabajos</span><strong>{documents.length}</strong><small>Documentos registrados</small></article>
         <article className="metric-card"><span>Estudiantes</span><strong>{metrics.owners}</strong><small>Con entregas en PlagGuard</small></article>
         <article className="metric-card"><span>Versiones</span><strong>{metrics.versions}</strong><small>Trazabilidad conservada</small></article>
-        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>{metrics.ocr} requieren OCR</small></article>
+        <article className="metric-card"><span>Listos</span><strong>{metrics.ready}</strong><small>{metrics.ocr} con texto no extraíble</small></article>
       </section>
 
       <section className="panel-card coordinator-filter-card">
