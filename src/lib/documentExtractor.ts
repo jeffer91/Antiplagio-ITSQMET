@@ -70,7 +70,7 @@ async function extractPdf(file: File): Promise<ExtractionResult> {
         pages,
         pdf.numPages,
         'needs_ocr',
-        'El PDF contiene muy poco texto seleccionable. Probablemente es un documento escaneado y requerirá OCR.',
+        'El PDF parece estar escaneado o contiene muy poco texto seleccionable. PlagGuard no analiza documentos escaneados; sube un PDF con texto seleccionable o un archivo DOCX.',
       );
     }
 
