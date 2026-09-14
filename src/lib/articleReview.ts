@@ -23,17 +23,18 @@ function compactIntegrity(snapshot: IntegrityReportSnapshot): Record<string, unk
   return {
     consolidated_similarity_adjusted: snapshot.summary.consolidated_similarity_adjusted,
     internal_similarity_adjusted: snapshot.summary.internal_similarity_adjusted,
-    external_similarity: snapshot.summary.external_similarity,
+    external_similarity_verified: snapshot.summary.external_similarity_verified,
     citation_integrity: citation ? {
-      total_citations: citation.total_citations,
-      total_references: citation.total_references,
-      unlinked_citations: citation.unlinked_citations.length,
-      references_with_apa_issues: citation.references.filter((reference) => reference.apa_issues.length > 0).length,
+      citation_count: citation.citation_count,
+      reference_count: citation.reference_count,
+      unlinked_citations: citation.unlinked_citation_count,
+      references_with_apa_issues: citation.apa_issue_count,
     } : null,
     assisted_writing: assisted ? {
-      document_risk_level: assisted.document_risk_level,
-      document_evidence_score: assisted.document_evidence_score,
-      flagged_segments: assisted.segments.length,
+      evidence_score: assisted.evidence_score,
+      flagged_word_percent: assisted.flagged_word_percent,
+      high_segment_count: assisted.high_segment_count,
+      medium_segment_count: assisted.medium_segment_count,
     } : null,
   };
 }
@@ -148,7 +149,7 @@ export async function loadLatestArticleReview(): Promise<ArticleReviewBundle | n
     score: row.score === null ? null : Number(row.score),
     duration_ms: row.duration_ms === null ? null : Number(row.duration_ms),
     findings: Array.isArray(row.findings) ? row.findings : [],
-  }));
+  })) as ArticleReviewerResult[];
 
   return { run, findings, reviewers };
 }
