@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { AdminAiEvaluatorsPanel } from './components/AdminAiEvaluatorsPanel';
+import { StudentArticleReviewDock } from './components/StudentArticleReviewDock';
 import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
@@ -62,14 +64,28 @@ function AppContent(): React.JSX.Element {
   if (adminRoute) {
     if (!session) return <LoginPage adminAccess />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'admin') return <AdminDashboard />;
+    if (profile.role === 'admin') {
+      return (
+        <>
+          <AdminDashboard />
+          <AdminAiEvaluatorsPanel />
+        </>
+      );
+    }
     return <LoginPage adminAccess activeRole={profile.role} />;
   }
 
   if (studentRoute) {
     if (!session) return <LoginPage />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'student') return <StudentDashboardV2 />;
+    if (profile.role === 'student') {
+      return (
+        <>
+          <StudentDashboardV2 />
+          <StudentArticleReviewDock />
+        </>
+      );
+    }
     return <LoginPage activeRole={profile.role} />;
   }
 

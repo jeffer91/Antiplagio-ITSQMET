@@ -10,6 +10,7 @@ import './phase7.css';
 import './phase8.css';
 import './plagguard.css';
 import './plagguard-extra.css';
+import './article-review.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
