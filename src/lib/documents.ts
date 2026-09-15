@@ -4,6 +4,7 @@ import type {
   AcademicDocument,
   DocumentListItem,
   DocumentVersion,
+  DocumentVersionSummary,
   UploadProgressStep,
 } from '../types/documents';
 
@@ -62,7 +63,7 @@ export async function loadDocuments(): Promise<DocumentListItem[]> {
   const [versionsResult, profilesResult, periodsResult] = await Promise.all([
     client
       .from('document_versions')
-      .select('id,document_id,version_number,uploaded_by,original_file_name,mime_type,size_bytes,sha256,storage_path,extracted_text,extracted_pages,word_count,character_count,page_count,extraction_status,extraction_error,created_at')
+      .select('id,document_id,version_number,uploaded_by,original_file_name,mime_type,size_bytes,sha256,storage_path,word_count,character_count,page_count,extraction_status,extraction_error,created_at')
       .in('document_id', ids)
       .order('version_number', { ascending: false }),
     client.from('profiles').select('id,full_name,email').in('id', ownerIds),
@@ -75,8 +76,8 @@ export async function loadDocuments(): Promise<DocumentListItem[]> {
   if (profilesResult.error) throw profilesResult.error;
   if (periodsResult.error) throw periodsResult.error;
 
-  const latestByDocument = new Map<string, DocumentVersion>();
-  for (const version of (versionsResult.data ?? []) as DocumentVersion[]) {
+  const latestByDocument = new Map<string, DocumentVersionSummary>();
+  for (const version of (versionsResult.data ?? []) as DocumentVersionSummary[]) {
     if (!latestByDocument.has(version.document_id)) latestByDocument.set(version.document_id, version);
   }
 
@@ -110,6 +111,17 @@ export async function loadDocumentVersions(documentId: string): Promise<Document
   return (data ?? []) as DocumentVersion[];
 }
 
+export async function loadDocumentVersion(versionId: string): Promise<DocumentVersion> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('document_versions')
+    .select('id,document_id,version_number,uploaded_by,original_file_name,mime_type,size_bytes,sha256,storage_path,extracted_text,extracted_pages,word_count,character_count,page_count,extraction_status,extraction_error,created_at')
+    .eq('id', versionId)
+    .single();
+  if (error) throw error;
+  return data as DocumentVersion;
+}
+
 export async function createOriginalSignedUrl(storagePath: string): Promise<string> {
   const client = requireClient();
   const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(storagePath, 60);
@@ -140,8 +152,6 @@ async function pendingAcademicContext(
   career: string | null = null,
   modality: string | null = null,
 ): Promise<ResolvedAcademicContext> {
-  // La carga inicial no debe depender de que exista todavía una asignación académica.
-  // El contexto se vincula después, cuando el Administrador habilita el proceso.
   return { ownerId, periodId: null, career, modality };
 }
 
