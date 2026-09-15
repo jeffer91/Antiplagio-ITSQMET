@@ -421,17 +421,11 @@ function dedupeReviewerFindings(findings: Finding[]): Finding[] {
   return result;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function base64ToBytes(value: string): Uint8Array {
+function base64ToArrayBuffer(value: string): ArrayBuffer {
   const binary = atob(value);
-  const result = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) result[index] = binary.charCodeAt(index);
-  return result;
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes.buffer;
 }
 
 async function credentialCryptoKey(): Promise<CryptoKey> {
@@ -443,9 +437,9 @@ async function credentialCryptoKey(): Promise<CryptoKey> {
 
 async function decryptCredential(row: CredentialRow): Promise<string> {
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: base64ToBytes(row.iv) },
+    { name: 'AES-GCM', iv: base64ToArrayBuffer(row.iv) },
     await credentialCryptoKey(),
-    base64ToBytes(row.encrypted_key),
+    base64ToArrayBuffer(row.encrypted_key),
   );
   return new TextDecoder().decode(plaintext);
 }
@@ -695,7 +689,7 @@ function normalizeModel(row: UnknownRecord): AiModelRow {
   };
 }
 
-async function loadModelContexts(service: ReturnType<typeof createClient>): Promise<{
+async function loadModelContexts(service: any): Promise<{
   modern: boolean;
   primary: ModelExecutionContext[];
   fallback: ModelExecutionContext[];
@@ -719,8 +713,8 @@ async function loadModelContexts(service: ReturnType<typeof createClient>): Prom
     .limit(MAX_PRIMARY_MODELS);
   if (fallbackQuery.error) throw fallbackQuery.error;
 
-  const primaryModels = (primaryQuery.data ?? []).map((row) => normalizeModel(row as UnknownRecord)).filter((model) => model.id && model.model_id);
-  const fallbackModels = (fallbackQuery.data ?? []).map((row) => normalizeModel(row as UnknownRecord)).filter((model) => model.id && model.model_id);
+  const primaryModels = (primaryQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
+  const fallbackModels = (fallbackQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
   const allIds = [...new Set([...primaryModels, ...fallbackModels].map((model) => model.id))];
   if (!allIds.length) return { modern: true, primary: [], fallback: [] };
 
@@ -730,7 +724,7 @@ async function loadModelContexts(service: ReturnType<typeof createClient>): Prom
     .in('model_id', allIds);
   if (credentialError) throw credentialError;
 
-  const credentials = new Map((credentialRows ?? []).map((row) => [String(row.model_id), row as CredentialRow]));
+  const credentials = new Map<string, CredentialRow>((credentialRows ?? []).map((row: any) => [String(row.model_id), row as CredentialRow]));
   const buildContexts = async (models: AiModelRow[]): Promise<ModelExecutionContext[]> => {
     const contexts: ModelExecutionContext[] = [];
     for (const model of models) {
@@ -762,7 +756,7 @@ async function runInBatches<T>(items: T[], batchSize: number, worker: (item: T, 
   return results;
 }
 
-async function readExistingBundle(service: ReturnType<typeof createClient>, versionId: string, attemptId: string | null): Promise<UnknownRecord | null> {
+async function readExistingBundle(service: any, versionId: string, attemptId: string | null): Promise<UnknownRecord | null> {
   if (!attemptId) return null;
   const { data: run } = await service
     .from('article_review_runs')
@@ -849,7 +843,7 @@ Deno.serve(async (request: Request) => {
 
     const configured = await loadModelContexts(service);
     let modern = configured.modern;
-    let primary = configured.primary;
+    const primary = configured.primary;
     const fallback = configured.fallback;
     let legacyEvaluators: LegacyEvaluatorRow[] = [];
     let legacyApiUrl = '';
@@ -911,7 +905,6 @@ Deno.serve(async (request: Request) => {
     if (modern) {
       results = await runInBatches(primary, 3, (context, index) => evaluateModel(index + 1, context, prompt, asNumber(version.page_count)));
 
-      // Sustituye modelos fallidos con respaldos disponibles, conservando el mismo slot para el consenso.
       const usedFallbackIds = new Set<string>();
       const replacements: UnknownRecord[] = [];
       for (let index = 0; index < results.length; index += 1) {
