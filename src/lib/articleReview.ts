@@ -2,6 +2,8 @@ import { supabase } from './supabase';
 import type { IntegrityReportSnapshot } from '../types/integrityReport';
 import type {
   AiEvaluatorConfig,
+  AiModelConfig,
+  AiModelTestResult,
   ArticleReviewBundle,
   ArticleReviewRun,
   ArticleReviewerResult,
@@ -71,6 +73,7 @@ export async function runArticleReview(
   };
 }
 
+// Compatibilidad con la Fase 28. Se mantiene para datos históricos.
 export async function loadAiEvaluators(): Promise<AiEvaluatorConfig[]> {
   const client = requireClient();
   const { data, error } = await client
@@ -99,14 +102,70 @@ export async function setAllAiEvaluatorsEnabled(enabled: boolean): Promise<void>
   await Promise.all(evaluators.map((evaluator) => setAiEvaluatorEnabled(evaluator.slot, enabled)));
 }
 
-export async function loadLatestArticleReview(): Promise<ArticleReviewBundle | null> {
+async function invokeAiAdmin<T>(body: Record<string, unknown>): Promise<T> {
   const client = requireClient();
-  const { data: runData, error: runError } = await client
+  const { data, error } = await client.functions.invoke('ai-admin', { body });
+  const payload = (data ?? {}) as { error?: string } & T;
+  if (error) throw new Error(payload.error || error.message || 'No fue posible gestionar las IA.');
+  if (payload.error) throw new Error(payload.error);
+  return payload;
+}
+
+export async function loadAiModels(): Promise<{ models: AiModelConfig[]; maxSelected: number }> {
+  const payload = await invokeAiAdmin<{ models: AiModelConfig[]; max_selected?: number }>({ action: 'list' });
+  return {
+    models: (payload.models ?? []).map((model) => ({
+      ...model,
+      priority: Number(model.priority ?? 0),
+      max_concurrency: Number(model.max_concurrency ?? 2),
+      timeout_ms: Number(model.timeout_ms ?? 110000),
+      last_latency_ms: model.last_latency_ms === null ? null : Number(model.last_latency_ms),
+      enabled: Boolean(model.enabled),
+      selected_for_review: Boolean(model.selected_for_review),
+      fallback: Boolean(model.fallback),
+      supports_vision: Boolean(model.supports_vision),
+      credential_configured: Boolean(model.credential_configured),
+    })),
+    maxSelected: Number(payload.max_selected ?? 15),
+  };
+}
+
+export async function saveAiModel(model: Partial<AiModelConfig>, apiKey?: string): Promise<AiModelConfig> {
+  const payload = await invokeAiAdmin<{ model: AiModelConfig }>({
+    action: 'upsert',
+    model,
+    api_key: apiKey?.trim() || undefined,
+  });
+  return payload.model;
+}
+
+export async function testAiModel(modelId: string): Promise<AiModelTestResult> {
+  return await invokeAiAdmin<AiModelTestResult>({ action: 'test', model_id: modelId });
+}
+
+export async function testAllAiModels(): Promise<AiModelTestResult[]> {
+  const payload = await invokeAiAdmin<{ results: AiModelTestResult[] }>({ action: 'test_all' });
+  return payload.results ?? [];
+}
+
+export async function deleteAiModel(modelId: string): Promise<void> {
+  await invokeAiAdmin<{ ok: boolean }>({ action: 'delete', model_id: modelId });
+}
+
+export async function loadLatestArticleReview(
+  versionId?: string | null,
+  attemptId?: string | null,
+): Promise<ArticleReviewBundle | null> {
+  const client = requireClient();
+  let query = client
     .from('article_review_runs')
-    .select('id,target_version_id,analysis_attempt_id,requested_by,status,rubric_version,prompt_version,evaluator_count,successful_evaluators,evaluator_slots,similarity_percent,final_score,performance_level,error_message,created_at,completed_at')
+    .select('id,target_version_id,analysis_attempt_id,requested_by,status,rubric_version,prompt_version,evaluator_count,successful_evaluators,evaluator_slots,selected_model_ids,successful_model_ids,minimum_consensus,minimum_success,config_snapshot,similarity_percent,final_score,performance_level,error_message,created_at,completed_at')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (versionId) query = query.eq('target_version_id', versionId);
+  if (attemptId) query = query.eq('analysis_attempt_id', attemptId);
+
+  const { data: runData, error: runError } = await query.maybeSingle();
   if (runError) throw runError;
   if (!runData) return null;
 
@@ -117,6 +176,11 @@ export async function loadLatestArticleReview(): Promise<ArticleReviewBundle | n
     similarity_percent: runData.similarity_percent === null ? null : Number(runData.similarity_percent),
     final_score: runData.final_score === null ? null : Number(runData.final_score),
     evaluator_slots: Array.isArray(runData.evaluator_slots) ? runData.evaluator_slots.map(Number) : [],
+    selected_model_ids: Array.isArray(runData.selected_model_ids) ? runData.selected_model_ids.map(String) : [],
+    successful_model_ids: Array.isArray(runData.successful_model_ids) ? runData.successful_model_ids.map(String) : [],
+    minimum_consensus: runData.minimum_consensus === null ? undefined : Number(runData.minimum_consensus),
+    minimum_success: runData.minimum_success === null ? undefined : Number(runData.minimum_success),
+    config_snapshot: runData.config_snapshot && typeof runData.config_snapshot === 'object' ? runData.config_snapshot as Record<string, unknown> : {},
   } satisfies ArticleReviewRun;
 
   const [{ data: findingsData, error: findingsError }, { data: reviewerData, error: reviewerError }] = await Promise.all([
@@ -127,7 +191,7 @@ export async function loadLatestArticleReview(): Promise<ArticleReviewBundle | n
       .order('deduction', { ascending: false }),
     client
       .from('article_reviewer_results')
-      .select('evaluator_slot,evaluator_name,score,duration_ms,status,findings,error_message')
+      .select('evaluator_slot,evaluator_name,model_ref,provider,provider_model_id,adapter,score,duration_ms,status,findings,error_message,started_at,completed_at')
       .eq('run_id', run.id)
       .order('evaluator_slot', { ascending: true }),
   ]);
