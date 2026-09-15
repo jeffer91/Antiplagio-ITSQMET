@@ -58,11 +58,15 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array {
+function base64ToArrayBuffer(value: string): ArrayBuffer {
   const binary = atob(value);
   const result = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) result[i] = binary.charCodeAt(i);
-  return result;
+  return result.buffer;
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 async function cryptoKey(): Promise<CryptoKey> {
@@ -74,7 +78,12 @@ async function cryptoKey(): Promise<CryptoKey> {
 
 async function encryptSecret(value: string): Promise<{ encrypted_key: string; iv: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await cryptoKey(), new TextEncoder().encode(value));
+  const encoded = new TextEncoder().encode(value);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: bytesToArrayBuffer(iv) },
+    await cryptoKey(),
+    bytesToArrayBuffer(encoded),
+  );
   return {
     encrypted_key: bytesToBase64(new Uint8Array(encrypted)),
     iv: bytesToBase64(iv),
@@ -83,9 +92,9 @@ async function encryptSecret(value: string): Promise<{ encrypted_key: string; iv
 
 async function decryptSecret(encrypted: string, iv: string): Promise<string> {
   const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: base64ToBytes(iv) },
+    { name: "AES-GCM", iv: base64ToArrayBuffer(iv) },
     await cryptoKey(),
-    base64ToBytes(encrypted),
+    base64ToArrayBuffer(encrypted),
   );
   return new TextDecoder().decode(plain);
 }
@@ -223,10 +232,11 @@ Deno.serve(async (req: Request) => {
       const { data: models, error } = await service.from("ai_models").select("*").order("priority", { ascending: false }).order("display_name");
       if (error) throw error;
       const ids = (models ?? []).map((row) => row.id);
-      const { data: credentials } = ids.length
+      const credentialResult = ids.length
         ? await service.from("ai_model_credentials").select("model_id").in("model_id", ids)
-        : { data: [] as Array<{ model_id: string }> };
-      const configured = new Set((credentials ?? []).map((row) => String(row.model_id)));
+        : { data: [] as Array<{ model_id: string }>, error: null };
+      if (credentialResult.error) throw credentialResult.error;
+      const configured = new Set((credentialResult.data ?? []).map((row: any) => String(row.model_id)));
       return json(req, 200, {
         models: (models ?? []).map((model) => ({ ...model, credential_configured: configured.has(String(model.id)) })),
         max_selected: MAX_SELECTED,
@@ -286,7 +296,7 @@ Deno.serve(async (req: Request) => {
       const { data: model, error: modelError } = await service.from("ai_models").select("*").eq("id", id).single();
       if (modelError || !model) return json(req, 404, { error: "Modelo no encontrado." });
       const { data: credential } = await service.from("ai_model_credentials").select("encrypted_key,iv").eq("model_id", id).maybeSingle();
-      const result = await runModelTest(model, credential);
+      const result = await runModelTest(model as UnknownRecord, credential as UnknownRecord | null);
       await service.from("ai_models").update({
         last_status: result.status,
         last_test_at: new Date().toISOString(),
@@ -305,7 +315,7 @@ Deno.serve(async (req: Request) => {
         const batch = (models ?? []).slice(i, i + 3);
         const tested = await Promise.all(batch.map(async (model) => {
           const { data: credential } = await service.from("ai_model_credentials").select("encrypted_key,iv").eq("model_id", model.id).maybeSingle();
-          const result = await runModelTest(model, credential);
+          const result = await runModelTest(model as UnknownRecord, credential as UnknownRecord | null);
           await service.from("ai_models").update({
             last_status: result.status,
             last_test_at: new Date().toISOString(),
