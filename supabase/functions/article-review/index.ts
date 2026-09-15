@@ -713,9 +713,9 @@ async function loadModelContexts(service: any): Promise<{
     .limit(MAX_PRIMARY_MODELS);
   if (fallbackQuery.error) throw fallbackQuery.error;
 
-  const primaryModels = (primaryQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
-  const fallbackModels = (fallbackQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
-  const allIds = [...new Set([...primaryModels, ...fallbackModels].map((model) => model.id))];
+  const primaryModels: AiModelRow[] = (primaryQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
+  const fallbackModels: AiModelRow[] = (fallbackQuery.data ?? []).map((row: any) => normalizeModel(row as UnknownRecord)).filter((model: AiModelRow) => model.id && model.model_id);
+  const allIds = [...new Set([...primaryModels, ...fallbackModels].map((model: AiModelRow) => model.id))];
   if (!allIds.length) return { modern: true, primary: [], fallback: [] };
 
   const { data: credentialRows, error: credentialError } = await service
@@ -742,7 +742,7 @@ async function loadModelContexts(service: any): Promise<{
   return {
     modern: true,
     primary: await buildContexts(primaryModels),
-    fallback: await buildContexts(fallbackModels.filter((model) => !primaryModels.some((primary) => primary.id === model.id))),
+    fallback: await buildContexts(fallbackModels.filter((model: AiModelRow) => !primaryModels.some((primary: AiModelRow) => primary.id === model.id))),
   };
 }
 
