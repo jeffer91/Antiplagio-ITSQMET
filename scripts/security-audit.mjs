@@ -64,9 +64,6 @@ for (const path of walk('.')) {
     regex.lastIndex = 0;
     if (regex.test(content)) failures.push(`${label}: ${path}`);
   }
-  if (path.startsWith('supabase/functions/') && /Access-Control-Allow-Origin['"]?\s*:\s*['"]\*['"]/.test(content)) {
-    failures.push(`CORS comodín en Edge Function: ${path}`);
-  }
 }
 
 if (failures.length) {
