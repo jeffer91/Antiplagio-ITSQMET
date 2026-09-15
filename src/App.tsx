@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { AdminAiEvaluatorsPanel } from './components/AdminAiEvaluatorsPanel';
 import { StudentArticleReviewDock } from './components/StudentArticleReviewDock';
-import { authSurface, isSupabaseConfigured } from './lib/supabase';
+import { authSurface, isSupabaseConfigured, type AccessSurface } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { CoordinatorDashboard } from './pages/CoordinatorDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
 import { StudentDashboardV2 } from './pages/StudentDashboardV2';
@@ -46,36 +46,40 @@ function useHashPath(): string {
   return hash;
 }
 
+function routeSurface(hash: string): AccessSurface | null {
+  if (hash === '#/admin') return 'admin';
+  if (hash === '#/coordinator') return 'coordinator';
+  if (hash === '#/student') return 'student';
+  return null;
+}
+
 function AppContent(): React.JSX.Element {
   const { loading, session, profile } = useAuth();
   const hash = useHashPath();
-  const adminRoute = hash === '#/admin';
-  const studentRoute = hash === '#/student';
+  const surface = routeSurface(hash);
 
   useEffect(() => {
-    if ((adminRoute && authSurface !== 'admin') || (studentRoute && authSurface !== 'student')) {
-      window.location.reload();
-    }
-  }, [adminRoute, studentRoute]);
+    if (surface && surface !== authSurface) window.location.reload();
+  }, [surface]);
 
   if (!isSupabaseConfigured) return <SetupPage />;
   if (loading) return <LoadingScreen />;
 
-  if (adminRoute) {
+  if (surface === 'admin') {
     if (!session) return <LoginPage adminAccess />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'admin') {
-      return (
-        <>
-          <AdminDashboard />
-          <AdminAiEvaluatorsPanel />
-        </>
-      );
-    }
+    if (profile.role === 'admin') return <AdminDashboard />;
     return <LoginPage adminAccess activeRole={profile.role} />;
   }
 
-  if (studentRoute) {
+  if (surface === 'coordinator') {
+    if (!session) return <LoginPage coordinatorAccess />;
+    if (!profile) return <ProfileProblem />;
+    if (profile.role === 'coordinator') return <CoordinatorDashboard />;
+    return <LoginPage coordinatorAccess activeRole={profile.role} />;
+  }
+
+  if (surface === 'student') {
     if (!session) return <LoginPage />;
     if (!profile) return <ProfileProblem />;
     if (profile.role === 'student') {

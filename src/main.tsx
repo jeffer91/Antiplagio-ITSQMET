@@ -11,6 +11,7 @@ import './phase8.css';
 import './plagguard.css';
 import './plagguard-extra.css';
 import './article-review.css';
+import './admin-refresh.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
