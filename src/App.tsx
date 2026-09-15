@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { AdminAiEvaluatorsPanel } from './components/AdminAiEvaluatorsPanel';
 import { StudentArticleReviewDock } from './components/StudentArticleReviewDock';
 import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -64,14 +63,7 @@ function AppContent(): React.JSX.Element {
   if (adminRoute) {
     if (!session) return <LoginPage adminAccess />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'admin') {
-      return (
-        <>
-          <AdminDashboard />
-          <AdminAiEvaluatorsPanel />
-        </>
-      );
-    }
+    if (profile.role === 'admin') return <AdminDashboard />;
     return <LoginPage adminAccess activeRole={profile.role} />;
   }
 
