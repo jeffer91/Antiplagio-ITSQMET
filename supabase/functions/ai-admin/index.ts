@@ -9,6 +9,14 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:4173",
 ]);
 
+const ALLOWED_AI_HOSTS = new Set([
+  "api.groq.com",
+  "openrouter.ai",
+  "api.cohere.com",
+  "generativelanguage.googleapis.com",
+  "api.cloudflare.com",
+]);
+
 const MAX_SELECTED = 15;
 type UnknownRecord = Record<string, unknown>;
 type Adapter = "openai" | "gemini" | "cohere" | "cloudflare" | "custom";
@@ -70,8 +78,10 @@ function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 async function cryptoKey(): Promise<CryptoKey> {
-  const material = Deno.env.get("AI_CREDENTIALS_MASTER_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (!material) throw new Error("No existe una clave maestra para proteger credenciales IA.");
+  const material = (Deno.env.get("AI_CREDENTIALS_MASTER_KEY") || "").trim();
+  if (material.length < 32) {
+    throw new Error("AI_CREDENTIALS_MASTER_KEY es obligatoria y debe tener al menos 32 caracteres.");
+  }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(material));
   return await crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
@@ -106,6 +116,21 @@ function defaultApiUrl(provider: string, adapter: Adapter): string {
   if (normalized === "openrouter") return "https://openrouter.ai/api/v1/chat/completions";
   if (adapter === "cohere" || normalized === "cohere") return "https://api.cohere.com/v2/chat";
   return "";
+}
+
+function validateApiUrl(value: string): string {
+  if (!value) return value;
+  let parsed: URL;
+  try {
+    parsed = new URL(value.replace("{model}", "model"));
+  } catch {
+    throw new Error("API URL inválida.");
+  }
+  if (parsed.protocol !== "https:") throw new Error("La API URL debe usar HTTPS.");
+  if (!ALLOWED_AI_HOSTS.has(parsed.hostname.toLowerCase())) {
+    throw new Error("El dominio de la API URL no está autorizado para recibir credenciales IA.");
+  }
+  return value;
 }
 
 async function testOpenAi(url: string, apiKey: string, modelId: string): Promise<void> {
@@ -193,7 +218,8 @@ async function runModelTest(model: UnknownRecord, credential: UnknownRecord | nu
   if (!credential) return { status: "unconfigured", latency_ms: 0, error: "Falta la API key." };
 
   const apiKey = await decryptSecret(asString(credential.encrypted_key), asString(credential.iv));
-  const apiUrl = asString(model.api_url) || defaultApiUrl(provider, adapter);
+  const apiUrl = validateApiUrl(asString(model.api_url) || defaultApiUrl(provider, adapter));
+  if (!apiUrl) return { status: "unconfigured", latency_ms: 0, error: "Falta una API URL autorizada." };
   const started = Date.now();
   try {
     if (adapter === "gemini") await testGemini(apiUrl, apiKey, modelId);
@@ -213,9 +239,10 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(req, 405, { error: "Método no permitido." });
 
   const authHeader = req.headers.get("Authorization") || "";
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (!url || !anonKey || !serviceKey) return json(req, 503, { error: "Supabase no está configurado." });
   const caller = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
   const service = createClient(url, serviceKey, { auth: { persistSession: false } });
 
@@ -254,12 +281,14 @@ Deno.serve(async (req: Request) => {
         if ((count ?? 0) >= MAX_SELECTED) return json(req, 409, { error: `Solo puedes seleccionar ${MAX_SELECTED} modelos por revisión.` });
       }
 
+      const requestedApiUrl = asString(raw.api_url);
+      if (requestedApiUrl) validateApiUrl(requestedApiUrl);
       const row = {
         provider: asString(raw.provider) || "Custom",
         adapter: asString(raw.adapter) || "openai",
         display_name: asString(raw.display_name),
         model_id: asString(raw.model_id),
-        api_url: asString(raw.api_url) || null,
+        api_url: requestedApiUrl || null,
         access_tier: asString(raw.access_tier) || null,
         specialty: asString(raw.specialty) || null,
         priority: Math.max(0, Math.min(10, asNumber(raw.priority, 5))),
