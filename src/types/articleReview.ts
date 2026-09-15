@@ -9,6 +9,7 @@ export type AiModelStatus =
   | 'provider_down'
   | 'error';
 export type AiAdapter = 'openai' | 'gemini' | 'cohere' | 'cloudflare' | 'custom';
+export type AiRuntime = 'cloud' | 'local';
 
 // Compatibilidad con Fase 28. Los slots históricos no se eliminan.
 export interface AiEvaluatorConfig {
@@ -23,6 +24,7 @@ export interface AiModelConfig {
   id: string;
   provider: string;
   adapter: AiAdapter;
+  runtime?: AiRuntime;
   display_name: string;
   model_id: string;
   api_url: string | null;
@@ -40,6 +42,7 @@ export interface AiModelConfig {
   last_latency_ms: number | null;
   last_error: string | null;
   credential_configured?: boolean;
+  storage?: 'firebase' | 'supabase';
   created_at: string;
   updated_at: string;
 }
