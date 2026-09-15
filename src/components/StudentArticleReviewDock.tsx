@@ -3,11 +3,37 @@ import { loadLatestArticleReview } from '../lib/articleReview';
 import { loadStudentCurrentResult } from '../lib/plagGuard';
 import type { ArticleReviewBundle, ArticleReviewerResult, ConsolidatedArticleFinding } from '../types/articleReview';
 
+const CRITERION_LABELS: Record<string, string> = {
+  title_summary: 'Título y resumen',
+  problem_justification: 'Problema y justificación',
+  objectives_questions: 'Objetivos o preguntas',
+  introduction_background: 'Introducción y antecedentes',
+  theoretical_framework: 'Marco teórico',
+  methodology: 'Metodología',
+  results: 'Resultados',
+  discussion: 'Discusión',
+  conclusions: 'Conclusiones',
+  references_citations: 'Referencias y citas',
+  integrity_originality: 'Originalidad e integridad',
+  academic_writing: 'Redacción académica',
+  tables_figures: 'Tablas y figuras',
+  global_coherence: 'Coherencia global',
+  editorial_format: 'Formato editorial',
+};
+
 function severityLabel(value: ConsolidatedArticleFinding['severity']): string {
   if (value === 'critical') return 'Crítico';
   if (value === 'high') return 'Alto';
   if (value === 'medium') return 'Medio';
   return 'Bajo';
+}
+
+function consensusLabel(value: number): string {
+  if (value >= 0.8) return 'Consenso muy alto';
+  if (value >= 0.6) return 'Consenso alto';
+  if (value >= 0.4) return 'Consenso medio';
+  if (value >= 0.2) return 'Consenso bajo';
+  return 'Observación minoritaria';
 }
 
 function reviewerTitle(reviewer: ArticleReviewerResult): string {
@@ -54,20 +80,15 @@ export function StudentArticleReviewDock(): React.JSX.Element {
     ? `${bundle.run.successful_evaluators}/${bundle.run.evaluator_count} IA`
     : 'Sin revisión IA';
 
-  const topFindings = useMemo(() => findings.slice(0, 40), [findings]);
-  const dots = useMemo(() => {
-    if (!bundle) return Array.from({ length: 15 }, (_, index) => ({ key: `empty-${index}`, state: 'idle', title: 'No utilizada' }));
-    const bySlot = new Map(reviewers.map((reviewer) => [reviewer.evaluator_slot, reviewer]));
-    return Array.from({ length: Math.max(bundle.run.evaluator_count, reviewers.length) }, (_, index) => {
-      const reviewer = bySlot.get(index + 1) ?? reviewers[index];
-      if (!reviewer) return { key: `idle-${index}`, state: 'idle', title: 'No utilizada' };
-      return {
-        key: `${reviewer.evaluator_slot}-${reviewer.model_ref ?? reviewer.evaluator_name}`,
-        state: reviewer.status === 'completed' ? 'ok' : 'bad',
-        title: reviewerTitle(reviewer),
-      };
-    });
-  }, [bundle, reviewers]);
+  const topFindings = useMemo(() => findings.slice(0, 60), [findings]);
+  const dots = useMemo(() => reviewers.map((reviewer) => ({
+    key: `${reviewer.evaluator_slot}-${reviewer.model_ref ?? reviewer.evaluator_name}`,
+    state: reviewer.status === 'completed' ? 'ok' : 'bad',
+    title: reviewerTitle(reviewer),
+  })), [reviewers]);
+
+  const triggerDots = dots.slice(0, 10);
+  const hiddenDots = Math.max(0, dots.length - triggerDots.length);
 
   return (
     <aside className={`article-review-dock ${open ? 'open' : ''}`} aria-label="Revisión global del artículo">
@@ -75,9 +96,12 @@ export function StudentArticleReviewDock(): React.JSX.Element {
         <span>Revisión académica IA</span>
         <strong>{typeof score === 'number' ? `${score.toFixed(1)}/10` : '—'}</strong>
         <small>{activeLabel}</small>
-        <span className="ai-dot-row compact" aria-label={activeLabel}>
-          {dots.slice(0, 15).map((dot) => <i key={dot.key} className={`ai-dot ${dot.state}`} title={dot.title} />)}
-        </span>
+        {triggerDots.length > 0 && (
+          <span className="ai-dot-row compact" aria-label={activeLabel}>
+            {triggerDots.map((dot) => <i key={dot.key} className={`ai-dot ${dot.state}`} title={dot.title} />)}
+            {hiddenDots > 0 && <b className="ai-dot-more">+{hiddenDots}</b>}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -96,10 +120,7 @@ export function StudentArticleReviewDock(): React.JSX.Element {
           {!loading && !bundle && !error && (
             <div className="article-review-empty">
               <strong>Sin revisión IA para el intento actual</strong>
-              <p>El antiplagio y la evaluación académica IA son procesos separados. Cuando las IA estén configuradas y se ejecute la revisión, aquí aparecerán los modelos que participaron.</p>
-              <div className="ai-dot-row empty-dots">
-                {dots.slice(0, 15).map((dot) => <i key={dot.key} className="ai-dot idle" title="No utilizada" />)}
-              </div>
+              <p>Cuando el estudiante ejecute el análisis, todas las IA habilitadas por Administración revisarán el artículo con los mismos 15 criterios.</p>
             </div>
           )}
 
@@ -107,9 +128,9 @@ export function StudentArticleReviewDock(): React.JSX.Element {
             <>
               <section className="article-review-score-card">
                 <div>
-                  <span>Puntuación orientativa</span>
+                  <span>Puntuación consolidada</span>
                   <strong>{bundle.run.final_score === null ? '—' : bundle.run.final_score.toFixed(1)}</strong>
-                  <small>/ 10</small>
+                  <small>/ 10 · normalizada por 15 criterios</small>
                 </div>
                 <div>
                   <span>Nivel</span>
@@ -125,22 +146,30 @@ export function StudentArticleReviewDock(): React.JSX.Element {
 
               <section className="ai-review-models">
                 <div className="ai-review-models-head">
-                  <div><strong>Modelos utilizados</strong><span>{bundle.run.successful_evaluators}/{bundle.run.evaluator_count} completaron</span></div>
-                  <div className="ai-dot-row">
-                    {dots.slice(0, 15).map((dot) => <i key={dot.key} className={`ai-dot ${dot.state}`} title={dot.title} />)}
+                  <div>
+                    <strong>IA utilizadas</strong>
+                    <span>Todas las habilitadas se ejecutaron automáticamente · {bundle.run.successful_evaluators}/{bundle.run.evaluator_count} completaron</span>
                   </div>
+                  {dots.length > 0 && (
+                    <div className="ai-dot-row">
+                      {dots.map((dot) => <i key={dot.key} className={`ai-dot ${dot.state}`} title={dot.title} />)}
+                    </div>
+                  )}
                 </div>
                 <div className="ai-review-model-list">
                   {reviewers.map((reviewer) => (
                     <span key={`${reviewer.evaluator_slot}-${reviewer.model_ref ?? reviewer.evaluator_name}`} className={reviewer.status === 'completed' ? 'ok' : 'bad'} title={reviewer.error_message || undefined}>
-                      <i />{reviewer.evaluator_name}{reviewer.provider ? ` · ${reviewer.provider}` : ''}
+                      <i />
+                      {reviewer.evaluator_name}
+                      {reviewer.provider ? ` · ${reviewer.provider}` : ''}
+                      {reviewer.status === 'completed' && reviewer.score !== null ? ` · ${reviewer.score.toFixed(1)}/10` : ''}
                     </span>
                   ))}
                 </div>
               </section>
 
               {bundle.run.status === 'partial' && (
-                <div className="alert warning-alert">La revisión terminó con algunas IA fallidas. La puntuación se calculó únicamente con resultados válidos y el consenso disponible.</div>
+                <div className="alert warning-alert">La revisión terminó con algunas IA fallidas. Las demás continuaron normalmente y la puntuación usa únicamente evaluaciones válidas.</div>
               )}
               {bundle.run.status === 'failed' && (
                 <div className="alert error-alert">{bundle.run.error_message || 'La revisión global no pudo completarse. El antiplagio no fue afectado.'}</div>
@@ -149,29 +178,30 @@ export function StudentArticleReviewDock(): React.JSX.Element {
               <section className="article-review-findings">
                 <div className="article-review-heading">
                   <div>
-                    <span className="eyebrow dark">Novedades consolidadas</span>
-                    <h3>{findings.length} aspectos con consenso suficiente</h3>
+                    <span className="eyebrow dark">Hallazgos consolidados</span>
+                    <h3>{findings.length} aspectos detectados por las IA</h3>
                   </div>
-                  <span className="deduction-total">−{Math.max(0, 10 - (bundle.run.final_score ?? 10)).toFixed(1)}</span>
+                  <span className="deduction-total">15 criterios</span>
                 </div>
 
                 {topFindings.length === 0 ? (
-                  <div className="article-review-empty compact"><strong>Sin novedades penalizadas por consenso</strong></div>
+                  <div className="article-review-empty compact"><strong>Sin hallazgos académicos reportados</strong></div>
                 ) : (
                   <div className="article-review-finding-list">
                     {topFindings.map((finding) => (
                       <article className={`article-review-finding severity-${finding.severity}`} key={finding.id}>
                         <div className="article-review-finding-top">
                           <div>
-                            <span>{finding.criterion.replace(/_/g, ' ')}</span>
+                            <span>{CRITERION_LABELS[finding.criterion] || finding.criterion.replace(/_/g, ' ')}</span>
                             <strong>{finding.title}</strong>
                           </div>
-                          <div className="article-review-deduction">−{finding.deduction.toFixed(2)}</div>
+                          <div className="article-review-consensus">{(finding.confidence * 100).toFixed(0)}%</div>
                         </div>
                         <div className="article-review-meta">
                           <span>{severityLabel(finding.severity)}</span>
                           {finding.page && <span>Pág. {finding.page}</span>}
-                          <span>{finding.detected_by_count}/{bundle.run.successful_evaluators} IA · {(finding.confidence * 100).toFixed(0)}% consenso</span>
+                          <span>{finding.detected_by_count}/{bundle.run.successful_evaluators} IA</span>
+                          <span>{consensusLabel(finding.confidence)}</span>
                         </div>
                         {finding.fragment && <blockquote>{finding.fragment}</blockquote>}
                         <p>{finding.explanation}</p>
