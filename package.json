@@ -10,6 +10,7 @@
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "audit:security": "node scripts/security-audit.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
