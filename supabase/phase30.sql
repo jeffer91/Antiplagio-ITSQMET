@@ -41,9 +41,9 @@ revoke select on public.ai_models from anon;
 grant select on public.ai_models to authenticated;
 
 -- 3) Bloqueo de endpoints arbitrarios ----------------------------------------
--- Las API keys cifradas solo pueden enviarse a proveedores explícitamente
--- autorizados. El campo puede permanecer NULL para que el servidor use el
--- endpoint oficial predeterminado del proveedor.
+-- NOT VALID evita que una URL histórica impida aplicar la migración. Las filas
+-- nuevas o modificadas sí quedan sujetas al CHECK y las Edge Functions además
+-- vuelven a validar el host antes de enviar una credencial.
 alter table public.ai_models
   drop constraint if exists ai_models_api_url_safe;
 
@@ -60,7 +60,7 @@ alter table public.ai_models
         or lower(api_url) like 'https://api.cloudflare.com/%'
       )
     )
-  );
+  ) not valid;
 
 comment on constraint ai_models_api_url_safe on public.ai_models is
-  'Impide enviar credenciales IA a endpoints arbitrarios o sin HTTPS.';
+  'Impide enviar credenciales IA a endpoints arbitrarios o sin HTTPS; las Edge Functions bloquean también filas históricas.';
