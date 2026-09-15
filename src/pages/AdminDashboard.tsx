@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/AppShell';
+import { AdminAiEvaluatorsPanel } from '../components/AdminAiEvaluatorsPanel';
 import {
   adminSetPeriodState,
   adminSetProfileRole,
@@ -21,6 +22,8 @@ const roleLabels: Record<AppRole, string> = {
   admin: 'Administrador',
 };
 
+type AdminSection = 'resumen' | 'periodos' | 'procesos' | 'estudiantes' | 'usuarios' | 'ia';
+
 interface IssuedStudentAccess {
   cedula: string;
   fullName: string;
@@ -34,6 +37,7 @@ interface IssuedCoordinatorAccess {
 }
 
 export function AdminDashboard(): React.JSX.Element {
+  const [section, setSection] = useState<AdminSection>('resumen');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [institutionalStudents, setInstitutionalStudents] = useState<InstitutionalStudent[]>([]);
   const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
@@ -134,7 +138,6 @@ export function AdminDashboard(): React.JSX.Element {
       const payload = (data ?? {}) as { error?: string; full_name?: string; temporary_pin?: string };
       if (invokeError) throw new Error(payload.error || invokeError.message || 'No fue posible emitir el PIN.');
       if (!payload.temporary_pin) throw new Error(payload.error || 'El servidor no devolvió el PIN temporal.');
-
       setIssuedAccess({ cedula, fullName: payload.full_name || 'Estudiante', pin: payload.temporary_pin });
       setAccessCedula('');
       await refresh();
@@ -179,21 +182,28 @@ export function AdminDashboard(): React.JSX.Element {
     }
   };
 
+  const navButton = (key: AdminSection, label: string): React.JSX.Element => (
+    <button type="button" className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{label}</button>
+  );
+
   return (
     <AppShell role="admin">
-      <header className="page-header compact-header admin-page-header">
+      <header className="page-header compact-header admin-page-header admin-page-header-clean">
         <div>
           <span className="eyebrow dark">Administración institucional</span>
           <h1>Panel de Administración</h1>
-          <p>Supervisa estudiantes, procesos, periodos, artículos e intentos de PlagGuard.</p>
+          <p>Configura PlagGuard por módulos. La operación del estudiante queda automatizada con los datos definidos aquí.</p>
         </div>
-        <nav className="admin-quick-nav" aria-label="Secciones administrativas">
-          <button type="button" onClick={() => document.getElementById('admin-periodos')?.scrollIntoView({ behavior: 'smooth' })}>Periodos</button>
-          <button type="button" onClick={() => document.getElementById('admin-procesos')?.scrollIntoView({ behavior: 'smooth' })}>Procesos</button>
-          <button type="button" onClick={() => document.getElementById('admin-estudiantes')?.scrollIntoView({ behavior: 'smooth' })}>Estudiantes</button>
-          <button type="button" onClick={() => document.getElementById('admin-usuarios')?.scrollIntoView({ behavior: 'smooth' })}>Usuarios</button>
-        </nav>
       </header>
+
+      <nav className="admin-module-nav" aria-label="Módulos de administración">
+        {navButton('resumen', 'Resumen')}
+        {navButton('periodos', 'Periodos')}
+        {navButton('procesos', 'Procesos')}
+        {navButton('estudiantes', 'Estudiantes')}
+        {navButton('usuarios', 'Usuarios')}
+        {navButton('ia', 'Inteligencias artificiales')}
+      </nav>
 
       {error && <div className="alert error-alert page-alert">{error}</div>}
       {message && <div className="alert success-alert page-alert">{message}</div>}
@@ -213,24 +223,48 @@ export function AdminDashboard(): React.JSX.Element {
         </div>
       )}
 
-      <section className="metric-grid admin-metric-grid">
-        <article className="metric-card"><span>Estudiantes</span><strong>{overview.students}</strong><small>Firebase UTET</small></article>
-        <article className="metric-card"><span>Procesos activos</span><strong>{overview.activeProcesses}</strong><small>{overview.pendingArticles} artículos pendientes</small></article>
-        <article className="metric-card"><span>Artículos</span><strong>{overview.articles}</strong><small>Versionados en PlagGuard</small></article>
-        <article className="metric-card"><span>Intentos</span><strong>{overview.attempts}</strong><small>{overview.doesNotComply} No cumple</small></article>
-        <article className="metric-card"><span>Cumple</span><strong>{overview.complies}</strong><small>{overview.repository} en repositorio final</small></article>
-        <article className="metric-card"><span>Regla institucional</span><strong>20 %</strong><small>3 Ordinario + 3 Supletorio</small></article>
-      </section>
-
-      {loading ? <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando administración…</div> : (
+      {section !== 'ia' && loading ? (
+        <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando administración…</div>
+      ) : (
         <>
-          <section className="admin-grid">
-            <article className="panel-card" id="admin-periodos">
+          {section === 'resumen' && (
+            <>
+              <section className="metric-grid admin-metric-grid admin-summary-grid">
+                <article className="metric-card"><span>Estudiantes</span><strong>{overview.students}</strong><small>Firebase UTET</small></article>
+                <article className="metric-card"><span>Procesos activos</span><strong>{overview.activeProcesses}</strong><small>{overview.pendingArticles} artículos pendientes</small></article>
+                <article className="metric-card"><span>Artículos</span><strong>{overview.articles}</strong><small>Versionados en PlagGuard</small></article>
+                <article className="metric-card"><span>Intentos</span><strong>{overview.attempts}</strong><small>{overview.doesNotComply} No cumple</small></article>
+                <article className="metric-card"><span>Cumple</span><strong>{overview.complies}</strong><small>{overview.repository} en repositorio final</small></article>
+                <article className="metric-card"><span>Regla institucional</span><strong>20 %</strong><small>3 Ordinario + 3 Supletorio</small></article>
+              </section>
+
+              <section className="admin-home-grid">
+                <button type="button" className="admin-module-card" onClick={() => setSection('periodos')}>
+                  <span>01</span><strong>Periodos</strong><small>Apertura de Ordinario y Supletorio.</small>
+                </button>
+                <button type="button" className="admin-module-card" onClick={() => setSection('procesos')}>
+                  <span>02</span><strong>Procesos</strong><small>Asignaciones automáticas desde Firebase.</small>
+                </button>
+                <button type="button" className="admin-module-card" onClick={() => setSection('estudiantes')}>
+                  <span>03</span><strong>Estudiantes</strong><small>Padrón y accesos con PIN.</small>
+                </button>
+                <button type="button" className="admin-module-card" onClick={() => setSection('usuarios')}>
+                  <span>04</span><strong>Usuarios</strong><small>Roles y accesos institucionales.</small>
+                </button>
+                <button type="button" className="admin-module-card featured" onClick={() => setSection('ia')}>
+                  <span>05</span><strong>Inteligencias artificiales</strong><small>Proveedor, modelo, API, credenciales y pruebas.</small>
+                </button>
+              </section>
+            </>
+          )}
+
+          {section === 'periodos' && (
+            <section className="panel-card admin-module-section">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow dark">Periodos</span>
                   <h2>Periodos institucionales</h2>
-                  <p className="muted-copy">Fuente: Firebase UTET. PlagGuard solo controla la apertura de Ordinario y Supletorio.</p>
+                  <p className="muted-copy">Fuente: Firebase UTET. PlagGuard controla únicamente la apertura de Ordinario y Supletorio.</p>
                 </div>
               </div>
               <div className="admin-list">
@@ -247,9 +281,11 @@ export function AdminDashboard(): React.JSX.Element {
                   </div>
                 ))}
               </div>
-            </article>
+            </section>
+          )}
 
-            <article className="panel-card" id="admin-procesos">
+          {section === 'procesos' && (
+            <section className="panel-card admin-module-section">
               <div className="section-heading">
                 <div>
                   <span className="eyebrow dark">Procesos</span>
@@ -272,85 +308,91 @@ export function AdminDashboard(): React.JSX.Element {
                 })}
                 {activeEnrollments.length === 0 && <p className="muted-copy">Los procesos aparecerán automáticamente cuando los estudiantes ingresen y su matrícula pueda vincularse con un periodo institucional.</p>}
               </div>
-            </article>
-          </section>
+            </section>
+          )}
 
-          <section className="panel-card" id="admin-estudiantes">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow dark">Estudiantes</span>
-                <h2>Padrón institucional y accesos</h2>
-                <p className="muted-copy">El ingreso estudiantil requiere cédula + PIN de 6 dígitos. Administración puede emitirlo o restablecerlo.</p>
+          {section === 'estudiantes' && (
+            <section className="panel-card admin-module-section">
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow dark">Estudiantes</span>
+                  <h2>Padrón institucional y accesos</h2>
+                  <p className="muted-copy">El ingreso estudiantil requiere cédula + PIN de 6 dígitos. Administración puede emitirlo o restablecerlo.</p>
+                </div>
               </div>
-            </div>
 
-            <div className="admin-actions">
+              <div className="admin-access-row">
+                <input
+                  className="admin-student-search"
+                  inputMode="numeric"
+                  value={accessCedula}
+                  onChange={(event) => setAccessCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Cédula para emitir PIN"
+                  maxLength={10}
+                />
+                <button className="primary-button compact" type="button" disabled={busy || accessCedula.length !== 10} onClick={() => void issueStudentPin(accessCedula)}>
+                  Emitir / restablecer PIN
+                </button>
+              </div>
+
               <input
                 className="admin-student-search"
-                inputMode="numeric"
-                value={accessCedula}
-                onChange={(event) => setAccessCedula(event.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="Cédula para emitir PIN"
-                maxLength={10}
+                value={studentQuery}
+                onChange={(event) => setStudentQuery(event.target.value)}
+                placeholder="Buscar por nombre, cédula o carrera"
               />
-              <button className="primary-button compact" type="button" disabled={busy || accessCedula.length !== 10} onClick={() => void issueStudentPin(accessCedula)}>
-                Emitir / restablecer PIN
-              </button>
-            </div>
-
-            <input
-              className="admin-student-search"
-              value={studentQuery}
-              onChange={(event) => setStudentQuery(event.target.value)}
-              placeholder="Buscar por nombre, cédula o carrera"
-            />
-            <div className="admin-list admin-student-list">
-              {visibleStudents.map((student) => (
-                <div className="admin-row" key={student.identification}>
-                  <div>
-                    <strong>{student.full_name}</strong>
-                    <span>{student.identification} · {student.career_name || 'Sin carrera'}{student.campus ? ' · ' + student.campus : ''}</span>
+              <div className="admin-list admin-student-list">
+                {visibleStudents.map((student) => (
+                  <div className="admin-row" key={student.identification}>
+                    <div>
+                      <strong>{student.full_name}</strong>
+                      <span>{student.identification} · {student.career_name || 'Sin carrera'}{student.campus ? ' · ' + student.campus : ''}</span>
+                    </div>
+                    <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void issueStudentPin(student.identification)}>
+                      Generar PIN
+                    </button>
                   </div>
-                  <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void issueStudentPin(student.identification)}>
-                    Generar PIN
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-card" id="admin-usuarios">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow dark">Usuarios y roles</span>
-                <h2>Cuentas de acceso</h2>
-                <p className="muted-copy">El Coordinador usa correo + contraseña. Después de asignar el rol, genera su clave desde esta misma sección.</p>
+                ))}
               </div>
-            </div>
-            <div className="admin-list">
-              {profiles.map((profile) => (
-                <div className="admin-row" key={profile.id}>
-                  <div><strong>{profile.full_name || 'Sin nombre'}</strong><span>{profile.cedula ? profile.cedula + ' · ' : ''}{profile.email}</span></div>
-                  <div className="admin-actions">
-                    <select
-                      value={profile.role}
-                      disabled={busy}
-                      onChange={(event) => void run(() => adminSetProfileRole(profile.id, event.target.value as AppRole), 'Rol actualizado a ' + roleLabels[event.target.value as AppRole] + '.')}
-                    >
-                      <option value="student">Estudiante</option>
-                      <option value="coordinator">Coordinador</option>
-                      <option value="admin">Administrador</option>
-                    </select>
-                    {profile.role === 'coordinator' && (
-                      <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void issueCoordinatorPassword(profile)}>
-                        Generar clave
-                      </button>
-                    )}
-                  </div>
+            </section>
+          )}
+
+          {section === 'usuarios' && (
+            <section className="panel-card admin-module-section">
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow dark">Usuarios y roles</span>
+                  <h2>Cuentas de acceso</h2>
+                  <p className="muted-copy">El Coordinador usa correo + contraseña. Después de asignar el rol, genera su clave desde esta sección.</p>
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
+              <div className="admin-list">
+                {profiles.map((profile) => (
+                  <div className="admin-row" key={profile.id}>
+                    <div><strong>{profile.full_name || 'Sin nombre'}</strong><span>{profile.cedula ? profile.cedula + ' · ' : ''}{profile.email}</span></div>
+                    <div className="admin-actions">
+                      <select
+                        value={profile.role}
+                        disabled={busy}
+                        onChange={(event) => void run(() => adminSetProfileRole(profile.id, event.target.value as AppRole), 'Rol actualizado a ' + roleLabels[event.target.value as AppRole] + '.')}
+                      >
+                        <option value="student">Estudiante</option>
+                        <option value="coordinator">Coordinador</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                      {profile.role === 'coordinator' && (
+                        <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void issueCoordinatorPassword(profile)}>
+                          Generar clave
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {section === 'ia' && <AdminAiEvaluatorsPanel />}
         </>
       )}
     </AppShell>
