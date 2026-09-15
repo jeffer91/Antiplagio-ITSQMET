@@ -152,25 +152,43 @@ export async function deleteAiModel(modelId: string): Promise<void> {
   await invokeAiAdmin<{ ok: boolean }>({ action: 'delete', model_id: modelId });
 }
 
+const RUN_SELECT_NEW = 'id,target_version_id,analysis_attempt_id,requested_by,status,rubric_version,prompt_version,evaluator_count,successful_evaluators,evaluator_slots,selected_model_ids,successful_model_ids,minimum_consensus,minimum_success,config_snapshot,similarity_percent,final_score,performance_level,error_message,created_at,completed_at';
+const RUN_SELECT_LEGACY = 'id,target_version_id,analysis_attempt_id,requested_by,status,rubric_version,prompt_version,evaluator_count,successful_evaluators,evaluator_slots,similarity_percent,final_score,performance_level,error_message,created_at,completed_at';
+const REVIEWER_SELECT_NEW = 'evaluator_slot,evaluator_name,model_ref,provider,provider_model_id,adapter,score,duration_ms,status,findings,error_message,started_at,completed_at';
+const REVIEWER_SELECT_LEGACY = 'evaluator_slot,evaluator_name,score,duration_ms,status,findings,error_message';
+
+async function findLatestRun(versionId?: string | null, attemptId?: string | null): Promise<Record<string, unknown> | null> {
+  const client = requireClient();
+  const build = (fields: string) => {
+    let query = client
+      .from('article_review_runs')
+      .select(fields)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (versionId) query = query.eq('target_version_id', versionId);
+    if (attemptId) query = query.eq('analysis_attempt_id', attemptId);
+    return query.maybeSingle();
+  };
+
+  const modern = await build(RUN_SELECT_NEW);
+  if (!modern.error) return modern.data as Record<string, unknown> | null;
+
+  // Permite desplegar primero el frontend y luego phase29 sin romper la vista del estudiante.
+  const legacy = await build(RUN_SELECT_LEGACY);
+  if (legacy.error) throw modern.error;
+  return legacy.data as Record<string, unknown> | null;
+}
+
 export async function loadLatestArticleReview(
   versionId?: string | null,
   attemptId?: string | null,
 ): Promise<ArticleReviewBundle | null> {
   const client = requireClient();
-  let query = client
-    .from('article_review_runs')
-    .select('id,target_version_id,analysis_attempt_id,requested_by,status,rubric_version,prompt_version,evaluator_count,successful_evaluators,evaluator_slots,selected_model_ids,successful_model_ids,minimum_consensus,minimum_success,config_snapshot,similarity_percent,final_score,performance_level,error_message,created_at,completed_at')
-    .order('created_at', { ascending: false })
-    .limit(1);
-  if (versionId) query = query.eq('target_version_id', versionId);
-  if (attemptId) query = query.eq('analysis_attempt_id', attemptId);
-
-  const { data: runData, error: runError } = await query.maybeSingle();
-  if (runError) throw runError;
+  const runData = await findLatestRun(versionId, attemptId);
   if (!runData) return null;
 
   const run = {
-    ...(runData as ArticleReviewRun),
+    ...(runData as unknown as ArticleReviewRun),
     evaluator_count: Number(runData.evaluator_count ?? 0),
     successful_evaluators: Number(runData.successful_evaluators ?? 0),
     similarity_percent: runData.similarity_percent === null ? null : Number(runData.similarity_percent),
@@ -178,27 +196,35 @@ export async function loadLatestArticleReview(
     evaluator_slots: Array.isArray(runData.evaluator_slots) ? runData.evaluator_slots.map(Number) : [],
     selected_model_ids: Array.isArray(runData.selected_model_ids) ? runData.selected_model_ids.map(String) : [],
     successful_model_ids: Array.isArray(runData.successful_model_ids) ? runData.successful_model_ids.map(String) : [],
-    minimum_consensus: runData.minimum_consensus === null ? undefined : Number(runData.minimum_consensus),
-    minimum_success: runData.minimum_success === null ? undefined : Number(runData.minimum_success),
+    minimum_consensus: runData.minimum_consensus === null || runData.minimum_consensus === undefined ? undefined : Number(runData.minimum_consensus),
+    minimum_success: runData.minimum_success === null || runData.minimum_success === undefined ? undefined : Number(runData.minimum_success),
     config_snapshot: runData.config_snapshot && typeof runData.config_snapshot === 'object' ? runData.config_snapshot as Record<string, unknown> : {},
   } satisfies ArticleReviewRun;
 
-  const [{ data: findingsData, error: findingsError }, { data: reviewerData, error: reviewerError }] = await Promise.all([
-    client
-      .from('article_review_findings')
-      .select('id,run_id,issue_key,criterion,title,severity,page,fragment,explanation,recommendation,deduction,detected_by,detected_by_count,confidence,created_at')
-      .eq('run_id', run.id)
-      .order('deduction', { ascending: false }),
-    client
-      .from('article_reviewer_results')
-      .select('evaluator_slot,evaluator_name,model_ref,provider,provider_model_id,adapter,score,duration_ms,status,findings,error_message,started_at,completed_at')
-      .eq('run_id', run.id)
-      .order('evaluator_slot', { ascending: true }),
-  ]);
-  if (findingsError) throw findingsError;
-  if (reviewerError) throw reviewerError;
+  const findingsPromise = client
+    .from('article_review_findings')
+    .select('id,run_id,issue_key,criterion,title,severity,page,fragment,explanation,recommendation,deduction,detected_by,detected_by_count,confidence,created_at')
+    .eq('run_id', run.id)
+    .order('deduction', { ascending: false });
 
-  const findings = (findingsData ?? []).map((row) => ({
+  let reviewerResult = await client
+    .from('article_reviewer_results')
+    .select(REVIEWER_SELECT_NEW)
+    .eq('run_id', run.id)
+    .order('evaluator_slot', { ascending: true });
+  if (reviewerResult.error) {
+    reviewerResult = await client
+      .from('article_reviewer_results')
+      .select(REVIEWER_SELECT_LEGACY)
+      .eq('run_id', run.id)
+      .order('evaluator_slot', { ascending: true });
+  }
+
+  const findingsResult = await findingsPromise;
+  if (findingsResult.error) throw findingsResult.error;
+  if (reviewerResult.error) throw reviewerResult.error;
+
+  const findings = (findingsResult.data ?? []).map((row) => ({
     ...(row as ConsolidatedArticleFinding),
     page: row.page === null ? null : Number(row.page),
     deduction: Number(row.deduction ?? 0),
@@ -207,7 +233,7 @@ export async function loadLatestArticleReview(
     confidence: Number(row.confidence ?? 0),
   }));
 
-  const reviewers = (reviewerData ?? []).map((row) => ({
+  const reviewers = (reviewerResult.data ?? []).map((row) => ({
     ...(row as ArticleReviewerResult),
     evaluator_slot: Number(row.evaluator_slot),
     score: row.score === null ? null : Number(row.score),
