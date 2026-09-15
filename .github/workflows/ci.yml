@@ -40,3 +40,4 @@ jobs:
           deno check supabase/functions/citation-integrity/index.ts
           deno check supabase/functions/ai-writing-indicators/index.ts
           deno check supabase/functions/article-review/index.ts
+          deno check supabase/functions/ai-admin/index.ts
