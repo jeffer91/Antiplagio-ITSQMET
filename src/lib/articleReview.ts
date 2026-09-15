@@ -207,22 +207,29 @@ export async function loadLatestArticleReview(
     .eq('run_id', run.id)
     .order('deduction', { ascending: false });
 
-  let reviewerResult = await client
+  const modernReviewers = await client
     .from('article_reviewer_results')
     .select(REVIEWER_SELECT_NEW)
     .eq('run_id', run.id)
     .order('evaluator_slot', { ascending: true });
-  if (reviewerResult.error) {
-    reviewerResult = await client
+
+  let reviewerRows: Record<string, unknown>[] = [];
+  let reviewerError = modernReviewers.error;
+  if (!modernReviewers.error) {
+    reviewerRows = (modernReviewers.data ?? []) as unknown as Record<string, unknown>[];
+  } else {
+    const legacyReviewers = await client
       .from('article_reviewer_results')
       .select(REVIEWER_SELECT_LEGACY)
       .eq('run_id', run.id)
       .order('evaluator_slot', { ascending: true });
+    reviewerError = legacyReviewers.error;
+    reviewerRows = (legacyReviewers.data ?? []) as unknown as Record<string, unknown>[];
   }
 
   const findingsResult = await findingsPromise;
   if (findingsResult.error) throw findingsResult.error;
-  if (reviewerResult.error) throw reviewerResult.error;
+  if (reviewerError) throw reviewerError;
 
   const findings = (findingsResult.data ?? []).map((row) => ({
     ...(row as ConsolidatedArticleFinding),
@@ -233,8 +240,8 @@ export async function loadLatestArticleReview(
     confidence: Number(row.confidence ?? 0),
   }));
 
-  const reviewers = (reviewerResult.data ?? []).map((row) => ({
-    ...(row as ArticleReviewerResult),
+  const reviewers = reviewerRows.map((row) => ({
+    ...(row as unknown as ArticleReviewerResult),
     evaluator_slot: Number(row.evaluator_slot),
     score: row.score === null ? null : Number(row.score),
     duration_ms: row.duration_ms === null ? null : Number(row.duration_ms),
