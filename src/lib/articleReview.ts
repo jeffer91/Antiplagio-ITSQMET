@@ -111,8 +111,8 @@ async function invokeAiAdmin<T>(body: Record<string, unknown>): Promise<T> {
   return payload;
 }
 
-export async function loadAiModels(): Promise<{ models: AiModelConfig[]; maxSelected: number }> {
-  const payload = await invokeAiAdmin<{ models: AiModelConfig[]; max_selected?: number }>({ action: 'list' });
+export async function loadAiModels(): Promise<{ models: AiModelConfig[] }> {
+  const payload = await invokeAiAdmin<{ models: AiModelConfig[] }>({ action: 'list' });
   return {
     models: (payload.models ?? []).map((model) => ({
       ...model,
@@ -121,12 +121,13 @@ export async function loadAiModels(): Promise<{ models: AiModelConfig[]; maxSele
       timeout_ms: Number(model.timeout_ms ?? 110000),
       last_latency_ms: model.last_latency_ms === null ? null : Number(model.last_latency_ms),
       enabled: Boolean(model.enabled),
-      selected_for_review: Boolean(model.selected_for_review),
+      selected_for_review: false,
       fallback: Boolean(model.fallback),
       supports_vision: Boolean(model.supports_vision),
       credential_configured: Boolean(model.credential_configured),
+      runtime: model.runtime === 'local' ? 'local' : 'cloud',
+      storage: model.storage === 'firebase' ? 'firebase' : model.storage,
     })),
-    maxSelected: Number(payload.max_selected ?? 15),
   };
 }
 
@@ -173,7 +174,6 @@ async function findLatestRun(versionId?: string | null, attemptId?: string | nul
   const modern = await build(RUN_SELECT_NEW);
   if (!modern.error) return modern.data as Record<string, unknown> | null;
 
-  // Permite desplegar primero el frontend y luego phase29 sin romper la vista del estudiante.
   const legacy = await build(RUN_SELECT_LEGACY);
   if (legacy.error) throw modern.error;
   return legacy.data as Record<string, unknown> | null;
