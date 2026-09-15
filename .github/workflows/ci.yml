@@ -22,6 +22,8 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Security regression audit
+        run: npm run audit:security
       - name: Typecheck and build
         run: npm run build
       - name: Deno
@@ -32,6 +34,8 @@ jobs:
       - name: Check all Edge Functions
         run: |
           deno check supabase/functions/student-cedula-login/index.ts
+          deno check supabase/functions/student-access-admin/index.ts
+          deno check supabase/functions/staff-access-admin/index.ts
           deno check supabase/functions/admin-pin-login/index.ts
           deno check supabase/functions/bootstrap-admin/index.ts
           deno check supabase/functions/bootstrap-admin-pin/index.ts
@@ -40,3 +44,4 @@ jobs:
           deno check supabase/functions/citation-integrity/index.ts
           deno check supabase/functions/ai-writing-indicators/index.ts
           deno check supabase/functions/article-review/index.ts
+          deno check supabase/functions/ai-admin/index.ts

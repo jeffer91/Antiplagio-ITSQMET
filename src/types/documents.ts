@@ -18,7 +18,7 @@ export interface ExtractedPage {
   text: string;
 }
 
-export interface DocumentVersion {
+export interface DocumentVersionSummary {
   id: string;
   document_id: string;
   version_number: number;
@@ -28,8 +28,6 @@ export interface DocumentVersion {
   size_bytes: number;
   sha256: string;
   storage_path: string;
-  extracted_text: string;
-  extracted_pages: ExtractedPage[] | null;
   word_count: number;
   character_count: number;
   page_count: number | null;
@@ -38,11 +36,16 @@ export interface DocumentVersion {
   created_at: string;
 }
 
+export interface DocumentVersion extends DocumentVersionSummary {
+  extracted_text: string;
+  extracted_pages: ExtractedPage[] | null;
+}
+
 export interface DocumentListItem extends AcademicDocument {
   owner_name: string;
   owner_email: string;
   period_name: string;
-  latest_version: DocumentVersion | null;
+  latest_version: DocumentVersionSummary | null;
 }
 
 export type UploadProgressStep =

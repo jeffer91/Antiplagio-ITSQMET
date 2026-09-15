@@ -1,14 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const FIREBASE_PROJECT_ID = "utet-4387a";
-const FIREBASE_API_KEY = "AIzaSyCaHf1C0BB0X_H3BDZ1o-UDAsPmLTjsZLA";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOWED_ORIGINS = new Set([
+  "https://jeffer91.github.io",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+]);
 
 type FirestoreValue = {
   stringValue?: string;
@@ -18,10 +17,32 @@ type FirestoreValue = {
   timestampValue?: string;
 };
 
-function json(status: number, body: Record<string, unknown>) {
+function firebaseConfig(): { projectId: string; apiKey: string } {
+  const projectId = (Deno.env.get("FIREBASE_PROJECT_ID") || "").trim();
+  const apiKey = (Deno.env.get("FIREBASE_API_KEY") || "").trim();
+  if (!projectId || !apiKey) throw new Error("Firebase UTET no está configurado en los secretos del servidor.");
+  return { projectId, apiKey };
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin");
+  return {
+    "Access-Control-Allow-Origin": origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://jeffer91.github.io",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function originAllowed(req: Request): boolean {
+  const origin = req.headers.get("Origin");
+  return !origin || ALLOWED_ORIGINS.has(origin);
+}
+
+function json(req: Request, status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json; charset=utf-8" },
   });
 }
 
@@ -38,21 +59,21 @@ function unwrap(fields: Record<string, FirestoreValue> | undefined): Record<stri
 }
 
 async function listFirebasePeriods(): Promise<Record<string, unknown>[]> {
+  const { projectId, apiKey } = firebaseConfig();
   const all: Record<string, unknown>[] = [];
   let pageToken = "";
 
   do {
     const url = new URL(
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/periodos`,
+      `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/periodos`,
     );
-    url.searchParams.set("key", FIREBASE_API_KEY);
+    url.searchParams.set("key", apiKey);
     url.searchParams.set("pageSize", "100");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
     if (!response.ok) {
-      const detail = await response.text();
-      console.error("Firestore periods error", response.status, detail);
+      console.error("Firestore periods error", response.status);
       throw new Error("No fue posible consultar los periodos de Firebase.");
     }
 
@@ -65,22 +86,23 @@ async function listFirebasePeriods(): Promise<Record<string, unknown>[]> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json(405, { error: "Método no permitido." });
+  if (!originAllowed(req)) return json(req, 403, { error: "Origen no permitido." });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method !== "POST") return json(req, 405, { error: "Método no permitido." });
 
   try {
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!supabaseUrl || !serviceKey) throw new Error("Supabase no está configurado en el servidor.");
+
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     const sourcePeriods = await listFirebasePeriods();
     const normalized = sourcePeriods
       .map((row) => {
-        const firebasePeriodId = String(
-          row.periodoId ?? row.id ?? row.firebaseDocumentId ?? "",
-        ).trim();
+        const firebasePeriodId = String(row.periodoId ?? row.id ?? row.firebaseDocumentId ?? "").trim();
         const name = String(row.label ?? firebasePeriodId).trim();
         const active = row.activo === true && row.eliminado !== true;
 
@@ -100,7 +122,6 @@ Deno.serve(async (req: Request) => {
         .select("id")
         .eq("firebase_period_id", period.firebasePeriodId)
         .maybeSingle();
-
       if (existingError) throw existingError;
 
       if (existing) {
@@ -134,7 +155,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return json(200, {
+    return json(req, 200, {
       ok: true,
       total: normalized.length,
       active: normalized.filter((row) => row.active).length,
@@ -142,6 +163,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error(error);
-    return json(500, { error: "No fue posible sincronizar los periodos desde Firebase." });
+    return json(req, 500, { error: error instanceof Error ? error.message : "No fue posible sincronizar los periodos desde Firebase." });
   }
 });

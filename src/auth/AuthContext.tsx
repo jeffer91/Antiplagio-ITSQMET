@@ -16,7 +16,7 @@ interface AuthContextValue {
   loading: boolean;
   profileError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signInStudent: (cedula: string) => Promise<void>;
+  signInStudent: (cedula: string, pin: string) => Promise<void>;
   signInAdminPin: (cedula: string, pin: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -29,10 +29,6 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  // La suscripción de Auth SOLO sincroniza la sesión.
-  // No se hacen consultas a Supabase dentro de onAuthStateChange porque el
-  // cliente mantiene un lock interno durante ese callback y una consulta
-  // adicional puede bloquear el login varios segundos.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
@@ -68,14 +64,7 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
-
-      // Mantén el perfil actual durante TOKEN_REFRESHED y otros eventos de la
-      // misma sesión. Antes se borraba el perfil y se activaba el loading en
-      // cada evento de Auth; como el efecto del perfil depende del user.id,
-      // un refresh del token del mismo usuario podía dejar la app cargando
-      // indefinidamente y cerrar visualmente cualquier modal abierto.
       setSession(nextSession);
-
       if (!nextSession) {
         setProfile(null);
         setProfileError(null);
@@ -89,7 +78,6 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
     };
   }, []);
 
-  // El perfil se carga fuera de onAuthStateChange para evitar el lock de Auth.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -160,20 +148,20 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
-      signInStudent: async (cedula) => {
+      signInStudent: async (cedula, pin) => {
         if (!supabase) throw new Error('Supabase no está configurado.');
 
         const cleanCedula = cedula.replace(/\D/g, '');
-        if (!/^\d{10}$/.test(cleanCedula)) {
-          throw new Error('Ingresa una cédula válida de 10 dígitos.');
-        }
+        const cleanPin = pin.replace(/\D/g, '');
+        if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
+        if (!/^\d{6}$/.test(cleanPin)) throw new Error('Ingresa tu PIN de 6 dígitos.');
 
         const { data, error } = await supabase.functions.invoke('student-cedula-login', {
-          body: { cedula: cleanCedula },
+          body: { cedula: cleanCedula, pin: cleanPin },
         });
 
         if (error) {
-          throw new Error((data as { error?: string } | null)?.error || 'La cédula no está habilitada para ingresar.');
+          throw new Error((data as { error?: string } | null)?.error || 'La cédula o el PIN no son válidos.');
         }
 
         const tokenHash = String((data as { token_hash?: string } | null)?.token_hash ?? '');
@@ -185,7 +173,6 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
         });
         if (verifyError) throw verifyError;
 
-        // Refuerzo explícito: no dependemos únicamente del evento de Auth.
         if (verified.session) {
           setSession(verified.session);
           setLoading(true);
@@ -196,13 +183,8 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
         const cleanCedula = cedula.replace(/\D/g, '');
         const cleanPin = pin.replace(/\D/g, '');
-
-        if (!/^\d{10}$/.test(cleanCedula)) {
-          throw new Error('Ingresa una cédula válida de 10 dígitos.');
-        }
-        if (!/^\d{4,6}$/.test(cleanPin)) {
-          throw new Error('Ingresa un PIN válido.');
-        }
+        if (!/^\d{10}$/.test(cleanCedula)) throw new Error('Ingresa una cédula válida de 10 dígitos.');
+        if (!/^\d{4,6}$/.test(cleanPin)) throw new Error('Ingresa un PIN válido.');
 
         const { data, error } = await supabase.functions.invoke('admin-pin-login', {
           body: { cedula: cleanCedula, pin: cleanPin },
@@ -244,8 +226,6 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth debe utilizarse dentro de AuthProvider.');
-  }
+  if (!context) throw new Error('useAuth debe utilizarse dentro de AuthProvider.');
   return context;
 }
