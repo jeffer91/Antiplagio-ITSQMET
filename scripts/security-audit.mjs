@@ -29,6 +29,8 @@ const studentLogin = read('supabase/functions/student-cedula-login/index.ts');
 const documents = read('src/lib/documents.ts');
 const browserHtml = read('index.html');
 const edgeEnv = read('supabase/functions/.env.example');
+const aiAdmin = read('supabase/functions/ai-admin/index.ts');
+const articleReview = read('supabase/functions/article-review/index.ts');
 
 assert(app.includes("#/coordinator") || app.includes("surface === 'coordinator'"), 'Falta la ruta funcional del Coordinador.');
 assert(auth.includes('signInStudent: (cedula: string, pin: string)'), 'El acceso estudiantil debe exigir cédula + PIN.');
@@ -36,6 +38,11 @@ assert(studentLogin.includes('student_pin_credentials'), 'La Edge Function de es
 assert(browserHtml.includes('rel="icon"') && browserHtml.includes('./favicon.svg'), 'El favicon no está conectado de forma portable.');
 assert(edgeEnv.includes('FIREBASE_PROJECT_ID=') && edgeEnv.includes('FIREBASE_API_KEY='), 'Faltan secretos Firebase documentados para Edge Functions.');
 assert(edgeEnv.includes('AI_CREDENTIALS_MASTER_KEY='), 'Falta documentar AI_CREDENTIALS_MASTER_KEY.');
+assert(edgeEnv.includes('AI_EXTERNAL_REVIEW_ENABLED=false'), 'La revisión IA externa debe iniciar deshabilitada hasta aprobación institucional.');
+assert(aiAdmin.includes('ALLOWED_AI_HOSTS') && articleReview.includes('ALLOWED_AI_HOSTS'), 'Falta validar los dominios que pueden recibir credenciales IA.');
+assert(!aiAdmin.includes('AI_CREDENTIALS_MASTER_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY'), 'ai-admin vuelve a reutilizar service_role como clave maestra.');
+assert(!articleReview.includes("AI_CREDENTIALS_MASTER_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY"), 'article-review vuelve a reutilizar service_role como clave maestra.');
+assert(articleReview.includes('AI_EXTERNAL_REVIEW_ENABLED'), 'La revisión IA externa no tiene interruptor explícito de privacidad.');
 
 const listSelectStart = documents.indexOf(".from('document_versions')");
 const listSelectEnd = documents.indexOf(".in('document_id', ids)", listSelectStart);
@@ -56,6 +63,9 @@ for (const path of walk('.')) {
   for (const { regex, label } of secretPatterns) {
     regex.lastIndex = 0;
     if (regex.test(content)) failures.push(`${label}: ${path}`);
+  }
+  if (path.startsWith('supabase/functions/') && /Access-Control-Allow-Origin['"]?\s*:\s*['"]\*['"]/.test(content)) {
+    failures.push(`CORS comodín en Edge Function: ${path}`);
   }
 }
 
