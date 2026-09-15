@@ -3,10 +3,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 
-export type AccessSurface = 'student' | 'admin';
+export type AccessSurface = 'student' | 'coordinator' | 'admin';
 
 function detectAccessSurface(): AccessSurface {
-  if (typeof window !== 'undefined' && window.location.hash === '#/admin') return 'admin';
+  if (typeof window !== 'undefined') {
+    if (window.location.hash === '#/admin') return 'admin';
+    if (window.location.hash === '#/coordinator') return 'coordinator';
+  }
   return 'student';
 }
 
@@ -19,14 +22,14 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
-        storageKey: 'plagguard-' + authSurface + '-auth',
+        storageKey: `plagguard-${authSurface}-auth`,
       },
     })
   : null;
 
 export function switchAccessSurface(surface: AccessSurface): void {
   if (typeof window === 'undefined') return;
-  const target = surface === 'admin' ? '#/admin' : '#/student';
+  const target = surface === 'admin' ? '#/admin' : surface === 'coordinator' ? '#/coordinator' : '#/student';
   if (window.location.hash !== target) window.location.hash = target;
   window.location.reload();
 }
