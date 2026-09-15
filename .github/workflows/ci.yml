@@ -35,6 +35,7 @@ jobs:
         run: |
           deno check supabase/functions/student-cedula-login/index.ts
           deno check supabase/functions/student-access-admin/index.ts
+          deno check supabase/functions/staff-access-admin/index.ts
           deno check supabase/functions/admin-pin-login/index.ts
           deno check supabase/functions/bootstrap-admin/index.ts
           deno check supabase/functions/bootstrap-admin-pin/index.ts
