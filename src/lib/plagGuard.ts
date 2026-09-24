@@ -40,7 +40,7 @@ export interface InstitutionalStudent {
 
 export interface StudentCorrection {
   id: string;
-  category: 'similarity' | 'citation' | 'apa' | 'assisted_writing';
+  category: 'similarity' | 'citation';
   fragment: string;
   source: string;
   reason: string;
@@ -359,18 +359,6 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
       });
     });
 
-    citation.references.forEach((reference) => {
-      if (reference.apa_issues.length === 0) return;
-      corrections.push({
-        id: `apa-${reference.ordinal}`,
-        category: 'apa',
-        fragment: compact(reference.raw_reference),
-        source: 'APA 7',
-        reason: reference.apa_issues.join(' · '),
-        action: 'Corrige la referencia siguiendo APA 7 y vuelve a comprobar los datos bibliográficos.',
-        affectsSimilarity: false,
-      });
-    });
   }
 
   return corrections.slice(0, 80);
