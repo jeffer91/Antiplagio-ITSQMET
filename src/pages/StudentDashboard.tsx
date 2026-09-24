@@ -39,7 +39,7 @@ function correctionLabel(category: StudentCorrection['category']): string {
   if (category === 'similarity') return 'Similitud';
   if (category === 'citation') return 'Cita';
   if (category === 'apa') return 'APA 7';
-  return 'Escritura asistida';
+  return 'IA semántica';
 }
 
 export function StudentDashboard(): React.JSX.Element {
