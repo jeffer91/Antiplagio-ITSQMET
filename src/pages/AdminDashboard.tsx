@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/AppShell';
-import { AdminAiEvaluatorsPanel } from '../components/AdminAiEvaluatorsPanel';
 import {
   adminSetPeriodState,
   adminSetProfileRole,
@@ -21,7 +20,7 @@ const roleLabels: Record<AppRole, string> = {
   admin: 'Administrador',
 };
 
-type AdminSection = 'resumen' | 'periodos' | 'procesos' | 'estudiantes' | 'usuarios' | 'ia';
+type AdminSection = 'resumen' | 'periodos' | 'procesos' | 'estudiantes' | 'usuarios';
 
 export function AdminDashboard(): React.JSX.Element {
   const [section, setSection] = useState<AdminSection>('resumen');
@@ -124,7 +123,6 @@ export function AdminDashboard(): React.JSX.Element {
         {navButton('procesos', 'Procesos')}
         {navButton('estudiantes', 'Estudiantes')}
         {navButton('usuarios', 'Usuarios')}
-        {navButton('ia', 'Inteligencias artificiales')}
       </nav>
 
       {error && <div className="alert error-alert page-alert">{error}</div>}
@@ -141,7 +139,7 @@ export function AdminDashboard(): React.JSX.Element {
         </section>
       )}
 
-      {section !== 'ia' && loading ? (
+      {loading ? (
         <div className="panel-card inline-loading"><span className="mini-spinner" />Cargando administración…</div>
       ) : (
         <>
@@ -151,7 +149,7 @@ export function AdminDashboard(): React.JSX.Element {
                 <div className="section-heading"><div><span className="eyebrow dark">Estado general</span><h2>Operación institucional</h2><p className="muted-copy">Usa el menú superior para entrar directamente a cada módulo.</p></div></div>
               </article>
               <article className="panel-card">
-                <div className="section-heading"><div><span className="eyebrow dark">IA</span><h2>Revisión académica</h2><p className="muted-copy">La administración de evaluadores queda concentrada en Inteligencias artificiales.</p></div></div>
+                <div className="section-heading"><div><span className="eyebrow dark">Motor antiplagio</span><h2>Análisis integral</h2><p className="muted-copy">Repositorio institucional, fuentes externas, IA semántica y validación de citas trabajan en un único análisis.</p></div></div>
               </article>
             </section>
           )}
@@ -223,7 +221,6 @@ export function AdminDashboard(): React.JSX.Element {
             </section>
           )}
 
-          {section === 'ia' && <AdminAiEvaluatorsPanel embedded />}
         </>
       )}
     </AppShell>
