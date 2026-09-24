@@ -785,7 +785,9 @@ function compareCandidate(target: PreparedText, candidate: Candidate): ComparedC
   }
   return {
     ...candidate,
-    verificationStatus: 'verified',
+    // Solo el texto completo verificable puede aumentar el porcentaje institucional.
+    // Abstracts y snippets se conservan como evidencia/candidatos aunque exista coincidencia.
+    verificationStatus: candidate.verificationScope === 'full_text' ? 'verified' : 'candidate',
     matchedWords,
     similarityPercent: Math.round((matchedWords / Math.max(1, target.tokens.length)) * 10_000) / 100,
     matches: comparison.matches,
@@ -1117,6 +1119,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
       collect('crossref', () => searchCrossref(queries, crossrefMailto)),
       braveKey ? collect('brave', () => searchBrave(queries, braveKey)) : Promise.resolve(),
     ]);
+
+    const discoveryProviders: Provider[] = ['openalex', 'core', 'semantic_scholar', 'crossref', 'brave'];
+    const successfulProviders = discoveryProviders.filter((provider) => providerSummary[provider].status === 'ok');
+    if (!successfulProviders.length) {
+      throw new Error('Análisis incompleto: ninguna fuente externa pudo consultarse. No se registrará un resultado 0%.');
+    }
 
     const merged = mergeCandidates(allCandidates);
     let compared = merged.map((candidate) => ({
