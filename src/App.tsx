@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { StudentArticleReviewDock } from './components/StudentArticleReviewDock';
 import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
@@ -70,14 +69,7 @@ function AppContent(): React.JSX.Element {
   if (studentRoute) {
     if (!session) return <LoginPage />;
     if (!profile) return <ProfileProblem />;
-    if (profile.role === 'student') {
-      return (
-        <>
-          <StudentDashboardV2 />
-          <StudentArticleReviewDock />
-        </>
-      );
-    }
+    if (profile.role === 'student') return <StudentDashboardV2 />;
     return <LoginPage activeRole={profile.role} />;
   }
 
