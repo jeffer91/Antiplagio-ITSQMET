@@ -1,0 +1,39 @@
+.build-version-badge {
+  position: fixed;
+  left: 12px;
+  bottom: 10px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #667085;
+  box-shadow: 0 3px 12px rgba(23, 32, 51, 0.08);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.build-version-badge span {
+  font-weight: 750;
+}
+
+.build-version-badge strong {
+  color: #172033;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .build-version-badge {
+    left: 8px;
+    bottom: 8px;
+    opacity: 0.82;
+  }
+}

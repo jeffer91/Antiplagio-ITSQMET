@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { BuildVersionBadge } from './components/BuildVersionBadge';
 import { authSurface, isSupabaseConfigured } from './lib/supabase';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
@@ -81,6 +82,7 @@ export default function App(): React.JSX.Element {
   return (
     <AuthProvider>
       <AppContent />
+      <BuildVersionBadge />
     </AuthProvider>
   );
 }

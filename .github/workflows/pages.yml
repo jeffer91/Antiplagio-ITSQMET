@@ -35,6 +35,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_APP_VERSION: PG-2026.09.24-r03
+          VITE_APP_COMMIT: ${{ github.sha }}
         run: npm run build:renderer
 
       - name: Configure Pages
