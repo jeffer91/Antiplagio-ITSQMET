@@ -1,4 +1,18 @@
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+// Supabase.ai existe en el Edge Runtime de Supabase. Esta declaración mantiene
+// el archivo verificable también con `deno check` fuera de ese runtime.
+declare const Supabase: {
+  ai: {
+    Session: new (model: string) => {
+      run: (
+        input: string,
+        options?: { mean_pool?: boolean; normalize?: boolean; stream?: boolean; timeout?: number },
+      ) => Promise<unknown>;
+    };
+  };
+};
 
 const ALGORITHM_VERSION = 'siai-external-ai-semantic-v2';
 const AI_SEMANTIC_VERSION = 'source-grounded-v1';
@@ -88,8 +102,9 @@ interface SearchQueries {
 }
 
 interface AiSemanticConfig {
-  apiUrl: string;
-  apiKey: string;
+  mode: 'chat' | 'embedding';
+  apiUrl: string | null;
+  apiKey: string | null;
   model: string;
 }
 
@@ -914,11 +929,111 @@ function mergeSemanticEvidence(
   };
 }
 
+const builtInEmbeddingModel = new Supabase.ai.Session('gte-small');
+
+async function embeddingFor(text: string): Promise<number[]> {
+  const raw = await builtInEmbeddingModel.run(text, { mean_pool: true, normalize: true });
+  if (!Array.isArray(raw)) throw new Error('La IA integrada no devolvió un vector válido');
+  const vector = raw.map((value) => Number(value));
+  if (!vector.length || vector.some((value) => !Number.isFinite(value))) {
+    throw new Error('La IA integrada devolvió un vector inválido');
+  }
+  return vector;
+}
+
+function cosineSimilarity(left: number[], right: number[]): number {
+  const length = Math.min(left.length, right.length);
+  if (!length) return 0;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < length; index += 1) {
+    dot += left[index] * right[index];
+    leftNorm += left[index] * left[index];
+    rightNorm += right[index] * right[index];
+  }
+  if (!leftNorm || !rightNorm) return 0;
+  return dot / Math.sqrt(leftNorm * rightNorm);
+}
+
+async function reviewCandidateWithBuiltInAi(
+  target: PreparedText,
+  candidate: ComparedCandidate,
+): Promise<ComparedCandidate> {
+  if (!candidate.text || candidate.text.length < 80) return candidate;
+
+  const source = prepareText(candidate.text.slice(0, MAX_SOURCE_TEXT_CHARS));
+  const targetWindows = semanticWindows(target, 40, 30, 7);
+  const sourceWindows = semanticWindows(source, 40, 30, 7);
+  if (!targetWindows.length || !sourceWindows.length) return candidate;
+
+  const targetVectors = await Promise.all(targetWindows.map(embeddingFor));
+  const sourceVectors = await Promise.all(sourceWindows.map(embeddingFor));
+  const ranked: Array<{ targetText: string; sourceText: string; score: number }> = [];
+
+  for (let targetIndex = 0; targetIndex < targetWindows.length; targetIndex += 1) {
+    for (let sourceIndex = 0; sourceIndex < sourceWindows.length; sourceIndex += 1) {
+      const similarity = cosineSimilarity(targetVectors[targetIndex], sourceVectors[sourceIndex]);
+      ranked.push({
+        targetText: targetWindows[targetIndex],
+        sourceText: sourceWindows[sourceIndex],
+        score: similarity,
+      });
+    }
+  }
+
+  ranked.sort((a, b) => b.score - a.score);
+  const matches: ExternalMatch[] = [];
+  const usedTargetRanges: Array<[number, number]> = [];
+
+  for (const item of ranked) {
+    if (item.score < 0.92 || matches.length >= 3) break;
+    const targetRange = locateTokenSequence(target, item.targetText);
+    const sourceRange = locateTokenSequence(source, item.sourceText);
+    if (!targetRange || !sourceRange) continue;
+
+    const overlapsExisting = usedTargetRanges.some(([start, end]) => {
+      const overlap = Math.max(0, Math.min(end, targetRange[1]) - Math.max(start, targetRange[0]));
+      const shorter = Math.max(1, Math.min(end - start, targetRange[1] - targetRange[0]));
+      return overlap / shorter >= 0.55;
+    });
+    if (overlapsExisting) continue;
+
+    usedTargetRanges.push(targetRange);
+    matches.push({
+      match_type: 'near',
+      target_start_word: targetRange[0],
+      target_end_word: targetRange[1],
+      source_start_word: sourceRange[0],
+      source_end_word: sourceRange[1],
+      target_excerpt: excerpt(target, targetRange[0], targetRange[1]),
+      source_excerpt: excerpt(source, sourceRange[0], sourceRange[1]),
+      similarity_score: Math.round(item.score * 10_000) / 100,
+      target_covered_ranges: [[targetRange[0], targetRange[1]]],
+    });
+  }
+
+  const enriched = {
+    ...candidate,
+    metadata: {
+      ...candidate.metadata,
+      target_total_words: target.tokens.length,
+      ai_semantic_mode: 'embedding',
+      ai_semantic_model: 'gte-small',
+    },
+  };
+  return mergeSemanticEvidence(enriched, matches);
+}
+
 async function reviewCandidateWithAi(
   target: PreparedText,
   candidate: ComparedCandidate,
   config: AiSemanticConfig,
 ): Promise<ComparedCandidate> {
+  if (config.mode === 'embedding') {
+    return reviewCandidateWithBuiltInAi(target, candidate);
+  }
+
   if (!candidate.text || candidate.text.length < 80) {
     return {
       ...candidate,
@@ -943,6 +1058,7 @@ async function reviewCandidateWithAi(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_SEMANTIC_TIMEOUT_MS);
   try {
+    if (!config.apiUrl || !config.apiKey) throw new Error('Proveedor externo de IA incompleto');
     const response = await fetch(config.apiUrl, {
       method: 'POST',
       signal: controller.signal,
@@ -1077,16 +1193,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const semanticKey = asString(Deno.env.get('SEMANTIC_SCHOLAR_API_KEY')) || null;
     const braveKey = asString(Deno.env.get('BRAVE_SEARCH_API_KEY'));
     const crossrefMailto = asString(Deno.env.get('CROSSREF_MAILTO')) || null;
-    const aiConfig: AiSemanticConfig = {
-      apiUrl: asString(Deno.env.get('PLAGIARISM_AI_API_URL')) || asString(Deno.env.get('ARTICLE_REVIEW_API_URL')),
-      apiKey: asString(Deno.env.get('PLAGIARISM_AI_API_KEY')) || asString(Deno.env.get('ARTICLE_REVIEW_API_KEY')),
-      model: asString(Deno.env.get('PLAGIARISM_AI_MODEL')) || asString(Deno.env.get('ARTICLE_REVIEW_MODEL')),
-    };
-    if (!aiConfig.apiUrl || !aiConfig.apiKey || !aiConfig.model) {
-      return jsonResponse({
-        error: 'Análisis incompleto: configura PLAGIARISM_AI_API_URL, PLAGIARISM_AI_API_KEY y PLAGIARISM_AI_MODEL.',
-      }, 503);
-    }
+    const configuredAiUrl = asString(Deno.env.get('PLAGIARISM_AI_API_URL')) || asString(Deno.env.get('ARTICLE_REVIEW_API_URL'));
+    const configuredAiKey = asString(Deno.env.get('PLAGIARISM_AI_API_KEY')) || asString(Deno.env.get('ARTICLE_REVIEW_API_KEY'));
+    const configuredAiModel = asString(Deno.env.get('PLAGIARISM_AI_MODEL')) || asString(Deno.env.get('ARTICLE_REVIEW_MODEL'));
+    const hasExternalAi = Boolean(configuredAiUrl && configuredAiKey && configuredAiModel);
+    const aiConfig: AiSemanticConfig = hasExternalAi
+      ? { mode: 'chat', apiUrl: configuredAiUrl, apiKey: configuredAiKey, model: configuredAiModel }
+      : { mode: 'embedding', apiUrl: null, apiKey: null, model: 'gte-small' };
 
     const providerSummary: Record<Provider | 'ai_semantic', ProviderState> = {
       openalex: openAlexKey
@@ -1098,7 +1211,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
       brave: braveKey
         ? { status: 'ok', candidates: 0, verified: 0 }
         : { status: 'disabled', candidates: 0, verified: 0, message: 'Configura BRAVE_SEARCH_API_KEY para búsqueda web general' },
-      ai_semantic: { status: 'ok', candidates: 0, verified: 0, message: `Modelo ${aiConfig.model}` },
+      ai_semantic: {
+        status: 'ok',
+        candidates: 0,
+        verified: 0,
+        message: aiConfig.mode === 'chat'
+          ? `Modelo externo ${aiConfig.model}`
+          : 'IA integrada Supabase · gte-small (fallback)',
+      },
     };
 
     const allCandidates: Candidate[] = [];
