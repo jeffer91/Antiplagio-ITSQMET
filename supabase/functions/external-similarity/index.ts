@@ -1,6 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ALGORITHM_VERSION = 'siai-external-shingle-v1';
+const ALGORITHM_VERSION = 'siai-external-ai-semantic-v2';
+const AI_SEMANTIC_VERSION = 'source-grounded-v1';
+const AI_SEMANTIC_MIN_SCORE = 84;
+const AI_SEMANTIC_MAX_CANDIDATES = 4;
+const AI_SEMANTIC_TIMEOUT_MS = 30_000;
 const SHINGLE_SIZE = 5;
 const MIN_MATCH_WORDS = 10;
 const MAX_TARGET_GAP = 5;
@@ -81,6 +85,18 @@ interface ProviderState {
 interface SearchQueries {
   exact: string[];
   semantic: string[];
+}
+
+interface AiSemanticConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+interface AiSemanticPayloadMatch {
+  target_excerpt?: unknown;
+  source_excerpt?: unknown;
+  similarity_score?: unknown;
 }
 
 const STOPWORDS = new Set([
@@ -777,8 +793,216 @@ function compareCandidate(target: PreparedText, candidate: Candidate): ComparedC
   };
 }
 
+
+function extractChatContent(payload: UnknownRecord): string {
+  const choices = asArray(payload.choices);
+  const first = asRecord(choices[0]);
+  const message = asRecord(first.message);
+  const content = message.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => asString(asRecord(part).text)).filter(Boolean).join('\n');
+  }
+  return '';
+}
+
+function parseJsonObject(raw: string): UnknownRecord {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  try {
+    return asRecord(JSON.parse(cleaned));
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return asRecord(JSON.parse(cleaned.slice(start, end + 1)));
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+}
+
+function locateTokenSequence(prepared: PreparedText, excerptText: string): [number, number] | null {
+  const needle = tokenize(excerptText).map((token) => token.normalized);
+  if (needle.length < MIN_MATCH_WORDS || needle.length > 60) return null;
+  const haystack = prepared.tokens.map((token) => token.normalized);
+  outer: for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[start + offset] !== needle[offset]) continue outer;
+    }
+    return [start, start + needle.length];
+  }
+  return null;
+}
+
+function semanticWindows(prepared: PreparedText, size = 90, step = 55, limit = 8): string[] {
+  const output: string[] = [];
+  if (!prepared.tokens.length) return output;
+  for (let start = 0; start < prepared.tokens.length && output.length < limit; start += step) {
+    const end = Math.min(prepared.tokens.length, start + size);
+    if (end - start < 20) break;
+    output.push(prepared.tokens.slice(start, end).map((token) => token.raw).join(' '));
+    if (end === prepared.tokens.length) break;
+  }
+  return output;
+}
+
+function bestSemanticPairs(target: PreparedText, source: PreparedText): Array<{ target: string; source: string; rank: number }> {
+  const targetWindows = semanticWindows(target);
+  const sourceWindows = semanticWindows(source);
+  const pairs: Array<{ target: string; source: string; rank: number }> = [];
+  for (const targetWindow of targetWindows) {
+    for (const sourceWindow of sourceWindows) {
+      const rank = jaccardWords(targetWindow, sourceWindow);
+      pairs.push({ target: targetWindow, source: sourceWindow, rank });
+    }
+  }
+  return pairs.sort((a, b) => b.rank - a.rank).slice(0, 4);
+}
+
+function mergeSemanticEvidence(
+  candidate: ComparedCandidate,
+  matches: ExternalMatch[],
+): ComparedCandidate {
+  if (!matches.length) {
+    return {
+      ...candidate,
+      metadata: {
+        ...candidate.metadata,
+        ai_semantic_reviewed: true,
+        ai_semantic_verified: false,
+        ai_semantic_match_count: 0,
+        ai_semantic_version: AI_SEMANTIC_VERSION,
+      },
+    };
+  }
+
+  const byRange = new Map<string, ExternalMatch>();
+  for (const match of [...candidate.matches, ...matches]) {
+    const key = `${match.target_start_word}:${match.target_end_word}:${match.source_start_word}:${match.source_end_word}`;
+    const existing = byRange.get(key);
+    if (!existing || match.similarity_score > existing.similarity_score) byRange.set(key, match);
+  }
+  const mergedMatches = [...byRange.values()].sort((a, b) => a.target_start_word - b.target_start_word);
+  const covered = new Set(candidate.coveredTargetWords);
+  for (const match of matches) {
+    for (const [start, end] of match.target_covered_ranges) {
+      for (let index = start; index < end; index += 1) covered.add(index);
+    }
+  }
+  const coveredTargetWords = [...covered].sort((a, b) => a - b);
+  const fullTextEvidence = candidate.verificationScope === 'full_text' && coveredTargetWords.length >= MIN_MATCH_WORDS;
+
+  return {
+    ...candidate,
+    verificationStatus: fullTextEvidence ? 'verified' : candidate.verificationStatus,
+    similarityPercent: Math.round((coveredTargetWords.length / Math.max(1, candidate.metadata.target_total_words as number || 1)) * 10_000) / 100,
+    matchedWords: coveredTargetWords.length,
+    matches: mergedMatches.slice(0, MAX_MATCHES_PER_SOURCE),
+    coveredTargetWords,
+    metadata: {
+      ...candidate.metadata,
+      ai_semantic_reviewed: true,
+      ai_semantic_verified: matches.length > 0,
+      ai_semantic_match_count: matches.length,
+      ai_semantic_version: AI_SEMANTIC_VERSION,
+    },
+  };
+}
+
+async function reviewCandidateWithAi(
+  target: PreparedText,
+  candidate: ComparedCandidate,
+  config: AiSemanticConfig,
+): Promise<ComparedCandidate> {
+  if (!candidate.text || candidate.text.length < 80) {
+    return {
+      ...candidate,
+      metadata: {
+        ...candidate.metadata,
+        ai_semantic_reviewed: true,
+        ai_semantic_verified: false,
+        ai_semantic_match_count: 0,
+        ai_semantic_version: AI_SEMANTIC_VERSION,
+      },
+    };
+  }
+
+  const source = prepareText(candidate.text.slice(0, MAX_SOURCE_TEXT_CHARS));
+  const pairs = bestSemanticPairs(target, source);
+  if (!pairs.length) return candidate;
+
+  const context = pairs.map((pair, index) =>
+    `PAR ${index + 1}\nTARGET:\n${pair.target}\n\nSOURCE:\n${pair.source}`
+  ).join('\n\n---\n\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_SEMANTIC_TIMEOUT_MS);
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0,
+        messages: [
+          {
+            role: 'system',
+            content: 'Analiza SOLO similitud/plagio entre TARGET y SOURCE. Busca paráfrasis semánticamente equivalentes o reproducción sustancial. No evalúes metodología, redacción, calidad académica ni autoría por IA. Nunca inventes texto. Devuelve únicamente JSON válido.',
+          },
+          {
+            role: 'user',
+            content: `Compara los pares siguientes. Devuelve {"matches":[{"target_excerpt":"10 a 45 palabras consecutivas copiadas literalmente de TARGET","source_excerpt":"10 a 45 palabras consecutivas copiadas literalmente de SOURCE","similarity_score":0-100}]}. Incluye solo similitudes sustanciales con score >= ${AI_SEMANTIC_MIN_SCORE}. Si solo comparten tema o vocabulario genérico, devuelve {"matches":[]}. Máximo 3 coincidencias.\n\n${context}`,
+          },
+        ],
+      }),
+    });
+    if (!response.ok) throw new Error(`IA semántica HTTP ${response.status}`);
+    const payload = asRecord(await response.json());
+    const parsed = parseJsonObject(extractChatContent(payload));
+    const rawMatches = asArray(parsed.matches).map(asRecord) as AiSemanticPayloadMatch[];
+    const matches: ExternalMatch[] = [];
+
+    for (const rawMatch of rawMatches.slice(0, 3)) {
+      const targetExcerpt = asString(rawMatch.target_excerpt);
+      const sourceExcerpt = asString(rawMatch.source_excerpt);
+      const score = asNumber(rawMatch.similarity_score) ?? 0;
+      if (score < AI_SEMANTIC_MIN_SCORE || !targetExcerpt || !sourceExcerpt) continue;
+      const targetRange = locateTokenSequence(target, targetExcerpt);
+      const sourceRange = locateTokenSequence(source, sourceExcerpt);
+      if (!targetRange || !sourceRange) continue;
+      matches.push({
+        match_type: 'near',
+        target_start_word: targetRange[0],
+        target_end_word: targetRange[1],
+        source_start_word: sourceRange[0],
+        source_end_word: sourceRange[1],
+        target_excerpt: excerpt(target, targetRange[0], targetRange[1]),
+        source_excerpt: excerpt(source, sourceRange[0], sourceRange[1]),
+        similarity_score: Math.min(100, Math.max(AI_SEMANTIC_MIN_SCORE, score)),
+        target_covered_ranges: [[targetRange[0], targetRange[1]]],
+      });
+    }
+
+    const enriched = {
+      ...candidate,
+      metadata: { ...candidate.metadata, target_total_words: target.tokens.length },
+    };
+    return mergeSemanticEvidence(enriched, matches);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function shouldKeepCandidate(candidate: ComparedCandidate): boolean {
   if (candidate.verificationStatus === 'verified') return true;
+  if (Number(candidate.metadata.ai_semantic_match_count ?? 0) > 0) return true;
   return candidate.discoveryModes.some((mode) => mode === 'exact' || mode === 'bibliographic' || mode === 'web');
 }
 
@@ -851,8 +1075,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const semanticKey = asString(Deno.env.get('SEMANTIC_SCHOLAR_API_KEY')) || null;
     const braveKey = asString(Deno.env.get('BRAVE_SEARCH_API_KEY'));
     const crossrefMailto = asString(Deno.env.get('CROSSREF_MAILTO')) || null;
+    const aiConfig: AiSemanticConfig = {
+      apiUrl: asString(Deno.env.get('PLAGIARISM_AI_API_URL')) || asString(Deno.env.get('ARTICLE_REVIEW_API_URL')),
+      apiKey: asString(Deno.env.get('PLAGIARISM_AI_API_KEY')) || asString(Deno.env.get('ARTICLE_REVIEW_API_KEY')),
+      model: asString(Deno.env.get('PLAGIARISM_AI_MODEL')) || asString(Deno.env.get('ARTICLE_REVIEW_MODEL')),
+    };
+    if (!aiConfig.apiUrl || !aiConfig.apiKey || !aiConfig.model) {
+      return jsonResponse({
+        error: 'Análisis incompleto: configura PLAGIARISM_AI_API_URL, PLAGIARISM_AI_API_KEY y PLAGIARISM_AI_MODEL.',
+      }, 503);
+    }
 
-    const providerSummary: Record<Provider, ProviderState> = {
+    const providerSummary: Record<Provider | 'ai_semantic', ProviderState> = {
       openalex: openAlexKey
         ? { status: 'ok', candidates: 0, verified: 0 }
         : { status: 'disabled', candidates: 0, verified: 0, message: 'Configura OPENALEX_API_KEY' },
@@ -862,6 +1096,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       brave: braveKey
         ? { status: 'ok', candidates: 0, verified: 0 }
         : { status: 'disabled', candidates: 0, verified: 0, message: 'Configura BRAVE_SEARCH_API_KEY para búsqueda web general' },
+      ai_semantic: { status: 'ok', candidates: 0, verified: 0, message: `Modelo ${aiConfig.model}` },
     };
 
     const allCandidates: Candidate[] = [];
@@ -884,7 +1119,49 @@ Deno.serve(async (request: Request): Promise<Response> => {
     ]);
 
     const merged = mergeCandidates(allCandidates);
-    const compared = merged.map((candidate) => compareCandidate(targetPrepared, candidate)).filter(shouldKeepCandidate);
+    let compared = merged.map((candidate) => ({
+      ...compareCandidate(targetPrepared, candidate),
+      metadata: { ...candidate.metadata, target_total_words: targetPrepared.tokens.length },
+    }));
+
+    const aiTargets = compared
+      .filter((candidate) => Boolean(candidate.text) && candidate.verificationScope !== 'metadata')
+      .sort((a, b) => {
+        const fullText = Number(b.verificationScope === 'full_text') - Number(a.verificationScope === 'full_text');
+        if (fullText !== 0) return fullText;
+        const semantic = Number(b.discoveryModes.includes('semantic')) - Number(a.discoveryModes.includes('semantic'));
+        return semantic !== 0 ? semantic : b.matchedWords - a.matchedWords;
+      })
+      .slice(0, AI_SEMANTIC_MAX_CANDIDATES);
+
+    providerSummary.ai_semantic.candidates = aiTargets.length;
+    if (aiTargets.length) {
+      const reviewed = await Promise.allSettled(
+        aiTargets.map((candidate) => reviewCandidateWithAi(targetPrepared, candidate, aiConfig)),
+      );
+      const successful = reviewed.filter((result): result is PromiseFulfilledResult<ComparedCandidate> => result.status === 'fulfilled');
+      if (!successful.length) {
+        providerSummary.ai_semantic = {
+          status: 'error',
+          candidates: aiTargets.length,
+          verified: 0,
+          message: 'La IA semántica no pudo verificar las fuentes candidatas.',
+        };
+        throw new Error('Análisis incompleto: la IA semántica no respondió correctamente.');
+      }
+      const reviewedByKey = new Map(successful.map((result) => [candidateKey(result.value), result.value]));
+      compared = compared.map((candidate) => reviewedByKey.get(candidateKey(candidate)) ?? candidate);
+      providerSummary.ai_semantic.verified = successful.reduce(
+        (sum, result) => sum + (Number(result.value.metadata.ai_semantic_match_count ?? 0) > 0 ? 1 : 0),
+        0,
+      );
+      const failures = reviewed.length - successful.length;
+      if (failures > 0) providerSummary.ai_semantic.message = `${failures} fuente(s) no pudieron verificarse; las demás sí fueron procesadas.`;
+    } else {
+      providerSummary.ai_semantic.message = 'Sin fuentes con texto suficiente para comparación semántica.';
+    }
+
+    compared = compared.filter(shouldKeepCandidate);
     const verified = compared
       .filter((candidate) => candidate.verificationStatus === 'verified')
       .sort((a, b) => b.matchedWords - a.matchedWords)
