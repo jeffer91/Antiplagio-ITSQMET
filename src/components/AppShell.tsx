@@ -80,7 +80,7 @@ export function AppShell({ role, children, suppressNotificationKinds = [] }: App
       <header className="plagguard-topbar">
         <div className="institutional-topbar-brand">
           <img src={ITSQMET_LOGO} alt="ITSQMET" />
-          <div><strong>PlagGuard</strong><span>Integridad académica</span></div>
+          <div><strong>PlagGuard</strong><span>Antiplagio institucional</span></div>
         </div>
 
         <div className="topbar-actions">

@@ -245,7 +245,7 @@ begin
   if not exists(
     select 1 from public.ai_writing_analyses
     where id::text = v_ai_id and target_version_id = p_target_version_id
-  ) then raise exception 'La trazabilidad de escritura asistida no corresponde a esta versión'; end if;
+  ) then raise exception 'La trazabilidad de validación semántica con IA no corresponde a esta versión'; end if;
 
   select count(*) into v_ordinary_used
   from public.analysis_attempts

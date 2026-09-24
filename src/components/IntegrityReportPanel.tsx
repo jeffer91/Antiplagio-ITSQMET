@@ -171,7 +171,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
             <article><span>Similitud consolidada</span><strong>{pct(report.snapshot.summary.consolidated_similarity_adjusted)}</strong></article>
             <article><span>Resultado</span><strong>Cumple</strong></article>
             <article><span>Módulos</span><strong>{availableModules}/4</strong></article>
-            <article><span>Señales de escritura asistida</span><strong>{report.snapshot.summary.ai_evidence_score === null ? 'N/D' : `${report.snapshot.summary.ai_evidence_score.toFixed(0)}/100`}</strong></article>
+            <article><span>Validación semántica IA</span><strong>{report.snapshot.summary.ai_evidence_score === null ? 'N/D' : `${report.snapshot.summary.ai_evidence_score.toFixed(0)}/100`}</strong></article>
           </div>
 
           <div className="report-integrity-row">
@@ -188,7 +188,7 @@ export function IntegrityReportPanel({ document, version, canRun }: Props): Reac
             <div><b>Hallazgos APA</b><span>{report.snapshot.summary.apa_issue_count ?? 'N/D'}</span></div>
           </div>
 
-          <div className="report-note">La similitud consolidada utiliza cobertura única de palabras: una coincidencia detectada en más de una fuente se contabiliza una sola vez. Las señales de escritura asistida se muestran por separado y no constituyen por sí solas una acusación de plagio.</div>
+          <div className="report-note">La similitud consolidada utiliza cobertura única de palabras: una coincidencia detectada en más de una fuente se contabiliza una sola vez. La IA semántica solo valida paráfrasis contra fuentes localizadas y no asigna por sí sola el porcentaje institucional.</div>
 
           {!safeToExport && <div className="alert error-alert">El informe no puede exportarse hasta que la huella sea válida y estén presentes los 4 módulos.</div>}
 

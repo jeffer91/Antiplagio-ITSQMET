@@ -50,7 +50,7 @@ export function CoordinatorDashboard(): React.JSX.Element {
         <div>
           <span className="eyebrow dark">PlagGuard · Coordinador</span>
           <h1>Revisión e informes oficiales</h1>
-          <p>Consulta el detalle completo de similitud, fuentes, exclusiones, citas, APA y señales de escritura asistida. El informe oficial se genera únicamente sobre la versión que obtiene Cumple.</p>
+          <p>Consulta el detalle completo de similitud, fuentes, exclusiones, citas, APA y validación semántica con IA. El informe oficial se genera únicamente sobre la versión que obtiene Cumple.</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => setUploadOpen(true)}>+ Cargar trabajo</button>
       </header>

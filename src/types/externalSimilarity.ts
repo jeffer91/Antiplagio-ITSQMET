@@ -11,7 +11,8 @@ export interface ExternalProviderState {
   message?: string;
 }
 
-export type ExternalProviderSummary = Partial<Record<ExternalProvider, ExternalProviderState>>;
+export type ExternalProviderSummaryKey = ExternalProvider | 'ai_semantic';
+export type ExternalProviderSummary = Partial<Record<ExternalProviderSummaryKey, ExternalProviderState>>;
 
 export interface ExternalSimilarityMatch {
   id?: string;

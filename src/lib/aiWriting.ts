@@ -26,22 +26,22 @@ function normalizeSignals(value: unknown): AiWritingSignal[] {
     }));
 }
 
-export async function runAiWritingAnalysis(target: DocumentVersion): Promise<AiWritingAnalysisResult> {
+export async function runAiSemanticSimilarityAnalysis(target: DocumentVersion): Promise<AiWritingAnalysisResult> {
   if (target.extraction_status !== 'ready' || !target.extracted_text.trim()) {
     throw new Error('Esta versión no tiene texto listo para analizar.');
   }
 
   const client = requireClient();
-  const { data, error } = await client.functions.invoke('ai-writing-indicators', {
+  const { data, error } = await client.functions.invoke('ai-semantic-similarity', {
     body: { target_version_id: target.id },
   });
-  if (error) throw new Error(error.message || 'No fue posible ejecutar los indicadores de escritura asistida.');
+  if (error) throw new Error(error.message || 'No fue posible registrar la validación semántica de plagio.');
 
   const analysisId = typeof data?.analysis_id === 'string' ? data.analysis_id : '';
-  if (!analysisId) throw new Error('La función no devolvió el identificador del análisis.');
+  if (!analysisId) throw new Error('La validación semántica no devolvió el identificador del análisis.');
 
   const result = await loadAiWritingAnalysis(analysisId);
-  if (!result) throw new Error('El análisis se guardó, pero no fue posible volver a cargarlo.');
+  if (!result) throw new Error('La validación semántica se guardó, pero no fue posible volver a cargarla.');
   return result;
 }
 

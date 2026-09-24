@@ -1,5 +1,4 @@
-import { runAiWritingAnalysis } from './aiWriting';
-import { runArticleReview } from './articleReview';
+import { runAiSemanticSimilarityAnalysis } from './aiWriting';
 import { runCitationIntegrityAnalysis } from './citationIntegrity';
 import { runExternalSimilarityAnalysis } from './externalSimilarity';
 import { buildIntegrityReportSnapshot } from './integrityReport';
@@ -18,7 +17,7 @@ export async function runPlagGuardAttempt(
     throw new Error('El archivo no tiene texto listo para analizar.');
   }
 
-  onProgress?.('1/5 · Comparando con el repositorio institucional…');
+  onProgress?.('1/4 · Comparando con el repositorio institucional…');
   const internal = await runSecureInternalSimilarityAnalysis(version);
   const automaticFilters = {
     exclude_bibliography: true,
@@ -34,14 +33,17 @@ export async function runPlagGuardAttempt(
     internalView.adjustedMatchedWords,
   );
 
-  onProgress?.('2/5 · Buscando en fuentes académicas y web…');
+  onProgress?.('2/4 · Buscando fuentes y verificando similitud semántica con IA…');
   await runExternalSimilarityAnalysis(version);
 
-  onProgress?.('3/5 · Revisando citas, referencias y APA 7…');
+  onProgress?.('3/4 · Revisando citas, referencias y exclusiones…');
   await runCitationIntegrityAnalysis(version);
 
-  onProgress?.('4/5 · Revisando señales de escritura asistida…');
-  await runAiWritingAnalysis(version);
+  // Este módulo conserva la trazabilidad histórica del cuarto análisis,
+  // pero ahora registra exclusivamente evidencia semántica de plagio
+  // ya vinculada a fuentes reales localizadas por la búsqueda externa.
+  onProgress?.('4/4 · Registrando evidencia semántica de plagio…');
+  await runAiSemanticSimilarityAnalysis(version);
 
   onProgress?.('Calculando el porcentaje consolidado de similitud…');
   const snapshot = await buildIntegrityReportSnapshot(document, version);
@@ -50,19 +52,6 @@ export async function runPlagGuardAttempt(
 
   const attempt = await recordAnalysisAttempt(version.id, consolidated, snapshot.provenance);
 
-  let globalReviewCompleted = false;
-  onProgress?.('5/5 · Ejecutando revisión global con las IA activas…');
-  try {
-    await runArticleReview(version.id, attempt.id, consolidated, snapshot);
-    globalReviewCompleted = true;
-  } catch (error) {
-    console.warn('La revisión global no pudo completarse. El antiplagio se conservó:', error);
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('plagguard:article-review-changed'));
-  }
-
-  onProgress?.(globalReviewCompleted
-    ? 'Análisis integral completado.'
-    : 'Antiplagio completado. La revisión global IA quedó pendiente o no está configurada.');
-
+  onProgress?.('Análisis de plagio completado.');
   return { attempt, snapshot, corrections: buildStudentCorrections(snapshot) };
 }
