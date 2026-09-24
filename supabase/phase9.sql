@@ -569,7 +569,7 @@ begin
   if not exists(select 1 from public.similarity_analyses where target_version_id = p_target_version_id) then raise exception 'Falta el análisis institucional'; end if;
   if not exists(select 1 from public.external_similarity_analyses where target_version_id = p_target_version_id) then raise exception 'Falta el análisis externo'; end if;
   if not exists(select 1 from public.citation_integrity_analyses where target_version_id = p_target_version_id) then raise exception 'Falta la revisión de citas y APA'; end if;
-  if not exists(select 1 from public.ai_writing_analyses where target_version_id = p_target_version_id) then raise exception 'Faltan las señales de escritura asistida'; end if;
+  if not exists(select 1 from public.ai_writing_analyses where target_version_id = p_target_version_id) then raise exception 'Falta la validación semántica con IA'; end if;
 
   select count(*) into v_ordinary_used from public.analysis_attempts
     where student_id = v_document.owner_id and period_id = v_period.id and process = 'ordinary'::public.attempt_process;
