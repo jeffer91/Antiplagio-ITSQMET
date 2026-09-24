@@ -5,7 +5,6 @@ import { createOriginalSignedUrl, loadDocumentVersions } from '../lib/documents'
 import { loadDocumentAttempts } from '../lib/staffWorkflow';
 import type { DocumentListItem, DocumentVersion, ExtractionStatus } from '../types/documents';
 import type { AnalysisAttempt } from '../types/plagGuard';
-import { AiWritingPanel } from './AiWritingPanel';
 import { CitationIntegrityPanel } from './CitationIntegrityPanel';
 import { ExternalSimilarityPanel } from './ExternalSimilarityPanel';
 import { IntegrityReportPanel } from './IntegrityReportPanel';
@@ -154,11 +153,10 @@ export function DocumentDetailsModal({ document, onClose }: Props): React.JSX.El
                       )}
                     </div>
                   </div>
-                  {canRunAnalysis && !attempt && <div className="report-note">Los cuatro módulos se ejecutan juntos para que el porcentaje y el intento pertenezcan a una sola ejecución.</div>}
+                  {canRunAnalysis && !attempt && <div className="report-note">Los controles antiplagio se ejecutan juntos para que el porcentaje y el intento pertenezcan a una sola ejecución.</div>}
                   <SimilarityPanel key={`internal-${version.id}-${refreshKey}`} version={version} canRun={false} />
                   <ExternalSimilarityPanel key={`external-${version.id}-${refreshKey}`} version={version} canRun={false} />
                   <CitationIntegrityPanel key={`citation-${version.id}-${refreshKey}`} version={version} canRun={false} />
-                  <AiWritingPanel key={`ai-${version.id}-${refreshKey}`} version={version} canRun={false} />
                   <IntegrityReportPanel key={`report-${version.id}-${refreshKey}`} document={document} version={version} canRun={canRunAnalysis} />
                 </article>
               );
