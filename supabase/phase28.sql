@@ -4,13 +4,15 @@
 -- Es segura tanto para instalaciones que aplicaron la versión anterior de Fase 28
 -- como para instalaciones nuevas, porque todos los DROP usan IF EXISTS.
 
-drop function if exists public.admin_set_ai_evaluator_enabled(smallint, boolean);
-drop function if exists public.can_read_article_review_version(uuid);
-
+-- Las políticas de las tablas dependen de can_read_article_review_version(),
+-- por eso primero se retiran las tablas y después las funciones auxiliares.
 drop table if exists public.article_review_findings cascade;
 drop table if exists public.article_reviewer_results cascade;
 drop table if exists public.article_review_runs cascade;
 drop table if exists public.ai_evaluators cascade;
+
+drop function if exists public.admin_set_ai_evaluator_enabled(smallint, boolean);
+drop function if exists public.can_read_article_review_version(uuid);
 
 comment on table public.external_similarity_analyses is
   'Análisis antiplagio externo. Puede incluir validación semántica con IA contra fuentes reales localizadas.';
