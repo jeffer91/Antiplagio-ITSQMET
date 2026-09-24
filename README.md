@@ -53,7 +53,9 @@ La búsqueda externa utiliza, según disponibilidad:
 - Crossref;
 - Brave Search para búsqueda web general.
 
-La validación semántica usa un proveedor compatible con OpenAI Chat Completions configurado exclusivamente para antiplagio. El modelo compara el texto objetivo contra contenido de fuentes ya localizadas; no recibe instrucciones de evaluación académica.
+La validación semántica usa directamente IA dentro de la Edge Function de antiplagio. Si existen `PLAGIARISM_AI_*`, utiliza ese proveedor compatible con OpenAI Chat Completions. Si no existen, usa como fallback el modelo de embeddings integrado de Supabase (`gte-small`) sin exponer claves en el navegador. En ambos casos la IA compara el texto objetivo únicamente contra contenido de fuentes ya localizadas; no recibe instrucciones de evaluación académica.
+
+El fallback integrado se usa de forma conservadora (umbral alto) porque `gte-small` está optimizado principalmente para inglés. Para documentos mayoritariamente en español conviene configurar un modelo externo multilingüe; la ausencia de ese proveedor no deja la aplicación sin IA ni permite inventar fuentes.
 
 ## Roles
 
@@ -145,7 +147,7 @@ PLAGIARISM_AI_API_KEY=
 PLAGIARISM_AI_MODEL=
 ```
 
-`PLAGIARISM_AI_API_URL` debe apuntar a un endpoint compatible con Chat Completions. El servidor valida las respuestas del modelo contra el texto real antes de incorporarlas como evidencia.
+`PLAGIARISM_AI_API_URL` debe apuntar a un endpoint compatible con Chat Completions cuando se quiera usar un modelo externo. Estas tres variables son opcionales porque existe el fallback integrado de Supabase. El servidor valida las respuestas contra el texto real antes de incorporarlas como evidencia.
 
 ## Variables del renderer
 
