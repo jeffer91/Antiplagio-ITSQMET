@@ -73,6 +73,8 @@ export interface AnalysisAttempt {
   executed_by: string;
   observation: string | null;
   provenance: Record<string, unknown>;
+  engine_version?: string;
+  counts_toward_limit?: boolean;
   created_at: string;
 }
 
@@ -85,7 +87,19 @@ export interface StudentCurrentResult {
   attempt_number?: number;
   consolidated_similarity?: number;
   status?: AttemptStatus;
+  engine_version?: string;
+  counts_toward_limit?: boolean;
   created_at?: string;
+  historical_available?: boolean;
+  historical_id?: string;
+  historical_target_document_id?: string;
+  historical_target_version_id?: string;
+  historical_process?: AttemptProcess;
+  historical_attempt_number?: number;
+  historical_similarity?: number;
+  historical_status?: AttemptStatus;
+  historical_engine_version?: string;
+  historical_created_at?: string;
 }
 
 export interface AppNotification {

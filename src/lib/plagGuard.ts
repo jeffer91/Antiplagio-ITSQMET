@@ -1,3 +1,4 @@
+import { PLAGGUARD_ENGINE_VERSION } from './engine';
 import { supabase } from './supabase';
 import type { Profile, AppRole } from '../types/auth';
 import type {
@@ -95,6 +96,8 @@ export async function loadStudentCurrentResult(studentId?: string, periodId?: st
     ...value,
     attempt_number: value.attempt_number === undefined ? undefined : Number(value.attempt_number),
     consolidated_similarity: value.consolidated_similarity === undefined ? undefined : Number(value.consolidated_similarity),
+    historical_attempt_number: value.historical_attempt_number === undefined ? undefined : Number(value.historical_attempt_number),
+    historical_similarity: value.historical_similarity === undefined ? undefined : Number(value.historical_similarity),
   };
 }
 
@@ -375,7 +378,7 @@ export async function recordAnalysisAttempt(
     p_target_version_id: versionId,
     p_consolidated_similarity: consolidatedSimilarity,
     p_observation: observation,
-    p_provenance: provenance,
+    p_provenance: { ...provenance, engine_version: PLAGGUARD_ENGINE_VERSION },
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;

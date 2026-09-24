@@ -1,4 +1,5 @@
 import { loadLatestAiWritingAnalysis } from './aiWriting';
+import { PLAGGUARD_ENGINE_VERSION } from './engine';
 import { loadLatestCitationIntegrityAnalysis } from './citationIntegrity';
 import { loadLatestExternalSimilarityAnalysis } from './externalSimilarity';
 import { loadLatestSimilarityAnalysis } from './similarity';
@@ -295,6 +296,7 @@ export async function buildIntegrityReportSnapshot(document: DocumentListItem, v
       segments: aiSegments,
     } : null,
     provenance: {
+      engine_version: PLAGGUARD_ENGINE_VERSION,
       internal_analysis_id: internal?.id ?? null,
       external_analysis_id: external?.id ?? null,
       citation_analysis_id: citations?.id ?? null,

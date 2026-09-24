@@ -143,6 +143,7 @@ export interface IntegrityReportSnapshot {
     segments: IntegrityReportAiSegment[];
   };
   provenance: {
+    engine_version: string;
     internal_analysis_id: string | null;
     external_analysis_id: string | null;
     citation_analysis_id: string | null;

@@ -144,6 +144,10 @@ export function StudentDashboardV2(): React.JSX.Element {
 
   const activeDocument = useMemo(() => resultDocument ?? documents[0] ?? null, [documents, resultDocument]);
   const latestVersion = activeDocument?.latest_version ?? null;
+  const historicalResult = Boolean(!currentResult.available && currentResult.historical_available);
+  const historicalMatchesLatest = Boolean(
+    historicalResult && latestVersion && currentResult.historical_target_version_id === latestVersion.id,
+  );
   const resultIsCompliant = visibleResult.available && visibleResult.status === 'complies';
   const resultIsNotCompliant = visibleResult.available && visibleResult.status === 'does_not_comply';
   const latestAlreadyAnalyzed = Boolean(
@@ -224,7 +228,7 @@ export function StudentDashboardV2(): React.JSX.Element {
   return (
     <AppShell
       role="student"
-      suppressNotificationKinds={staleCurrentResult ? ['process_completed', 'attempts_exhausted', 'supplementary_required'] : []}
+      suppressNotificationKinds={(staleCurrentResult || historicalResult) ? ['process_completed', 'attempts_exhausted', 'supplementary_required'] : []}
     >
       <div className="student-simple-shell">
         <header className="student-welcome">
@@ -244,6 +248,19 @@ export function StudentDashboardV2(): React.JSX.Element {
           <section className="student-process-alert neutral">
             <strong>Artículo habilitado para carga</strong>
             <p>Se encontró un resultado histórico sin un documento disponible en tu proceso actual. Ese registro no bloqueará la carga de tu artículo.</p>
+          </section>
+        )}
+
+        {historicalResult && (
+          <section className="student-process-alert neutral">
+            <strong>Resultado histórico pendiente de revalidación</strong>
+            <p>
+              El análisis anterior se conserva únicamente como historial y no consume intentos del motor actual.
+              {currentResult.historical_similarity !== undefined
+                ? ` Resultado anterior: ${currentResult.historical_similarity.toFixed(1)}%.`
+                : ''}
+              {' '}Ejecuta nuevamente el antiplagio para obtener un resultado vigente.
+            </p>
           </section>
         )}
 
@@ -278,6 +295,11 @@ export function StudentDashboardV2(): React.JSX.Element {
                   <span className={`result-state ${resultIsCompliant ? 'ok' : 'bad'}`}>
                     {resultIsCompliant ? 'Cumple' : 'No cumple'}
                   </span>
+                </>
+              ) : historicalResult ? (
+                <>
+                  <strong className="result-percent">—</strong>
+                  <span className="result-state">Reanálisis requerido</span>
                 </>
               ) : (
                 <>
@@ -341,8 +363,18 @@ export function StudentDashboardV2(): React.JSX.Element {
               ) : (
                 <>
                   <div>
-                    <strong>{latestVersion ? `Versión ${latestVersion.version_number} lista` : 'Artículo cargado'}</strong>
-                    <span>{latestVersion?.original_file_name ?? activeDocument.title}</span>
+                    <strong>
+                      {historicalMatchesLatest
+                        ? 'Reanaliza tu artículo'
+                        : latestVersion
+                          ? `Versión ${latestVersion.version_number} lista`
+                          : 'Artículo cargado'}
+                    </strong>
+                    <span>
+                      {historicalMatchesLatest
+                        ? 'El resultado anterior queda como historial y este análisis inicia con tus intentos vigentes.'
+                        : latestVersion?.original_file_name ?? activeDocument.title}
+                    </span>
                   </div>
                   <button
                     className="primary-button compact"
@@ -350,7 +382,7 @@ export function StudentDashboardV2(): React.JSX.Element {
                     onClick={() => void runAnalysis()}
                     disabled={!canAnalyze || analyzing}
                   >
-                    {analyzing ? 'Analizando…' : 'Analizar ahora'}
+                    {analyzing ? 'Analizando…' : historicalMatchesLatest ? 'Reanalizar plagio' : 'Analizar ahora'}
                   </button>
                 </>
               )}

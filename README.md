@@ -115,7 +115,10 @@ phase25.sql
 phase26.sql
 phase27.sql
 phase28.sql
+phase29.sql
 ```
+
+La fase 29 conserva los intentos anteriores como historial, deja de contarlos dentro del límite 3+3 y permite reanalizar la misma versión con el motor `plagguard-antiplagio-v2`. Los resultados históricos no cierran el proceso actual ni permanecen activos en el corpus hasta ser revalidados.
 
 No existe `phase17.sql`. La fase 28 actual retira de forma segura las tablas y funciones del antiguo revisor académico global. En instalaciones que aplicaron una versión anterior de la fase 28, vuelve a ejecutar la fase 28 actual para completar esa limpieza.
 
