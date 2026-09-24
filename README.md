@@ -1,209 +1,151 @@
 # PlagGuard · ITSQMET
 
-Aplicación institucional de integridad académica para gestionar entregas, versiones, intentos y evidencia de similitud del ITSQMET.
+PlagGuard es el sistema institucional de **antiplagio y similitud** del ITSQMET. Su alcance es deliberadamente único: localizar coincidencias, verificar sus fuentes, detectar paráfrasis con apoyo de IA y calcular un porcentaje de similitud trazable.
 
-## Estado actual
+**PlagGuard no califica artículos, no revisa metodología, resultados, discusión, conclusiones ni calidad académica, y no intenta determinar si un texto fue escrito por IA.**
 
-**PlagGuard 1.0**
+## Qué analiza
 
-- Electron + React + TypeScript + Vite.
-- Supabase Auth, PostgreSQL, RLS y Storage privado.
-- Roles: `student`, `coordinator` y `admin`.
-- PDF y DOCX de hasta 25 MB.
-- Versiones inmutables y huella SHA-256 del archivo.
-- Similitud institucional contra el repositorio final ITSQMET.
-- Búsqueda externa con OpenAlex, CORE, Semantic Scholar, Crossref y Brave opcional.
-- Revisión de citas, referencias y APA 7.
-- Señales estilométricas de escritura asistida para revisión humana; no se presentan como prueba de autoría por IA.
-- Similitud consolidada por cobertura única de palabras para evitar doble conteo.
-- Intentos Ordinario/Supletorio con trazabilidad completa.
-- Informe oficial PDF/Excel exclusivo de Coordinador/Administrador.
+Cada intento ejecuta un único flujo:
+
+```text
+PDF / DOCX
+   ↓
+Extracción de texto + SHA-256
+   ↓
+1. Similitud contra repositorio institucional
+   ↓
+2. Búsqueda de fuentes académicas y web
+   ↓
+3. IA semántica contra las fuentes reales localizadas
+   ↓
+4. Citas, referencias y exclusiones necesarias para el cálculo
+   ↓
+Cobertura única de palabras coincidentes
+   ↓
+Porcentaje consolidado
+   ↓
+≤ 20 % → Cumple     > 20 % → No cumple
+```
+
+La IA **no inventa un porcentaje**. Solo puede aportar una coincidencia semántica si el fragmento devuelto existe literalmente tanto en el documento del estudiante como en una fuente localizada. Las coincidencias de abstracts, snippets o metadatos pueden conservarse como evidencia, pero únicamente el texto completo verificable puede aumentar el porcentaje institucional.
+
+Si la búsqueda externa o la IA obligatoria no pueden completarse, PlagGuard detiene el intento y muestra un error de **análisis incompleto**. Un fallo técnico no debe convertirse en un resultado de 0 %.
 
 ## Regla institucional
 
-PlagGuard utiliza como resultado del intento la **similitud consolidada ajustada**.
+- Límite de similitud: **20 %**.
+- Ordinario: **3 intentos**.
+- Supletorio: **3 intentos adicionales**.
+- La primera versión que obtiene **Cumple** cierra el proceso.
+- Los intentos anteriores permanecen en la trazabilidad institucional.
+- El repositorio institucional incorpora la versión final que obtuvo Cumple.
 
-```text
-0 % a 20 %   → Cumple
-más de 20 %  → No cumple
-```
+El porcentaje consolidado usa cobertura única de palabras. Si el mismo fragmento aparece en varias fuentes, no se suma varias veces.
 
-El porcentaje consolidado no suma simplemente similitud interna + externa. Se calcula sobre las palabras cubiertas, evitando contabilizar dos veces un mismo fragmento encontrado en varias fuentes.
+## Fuentes externas
 
-Las citas textuales y bibliografía pueden excluirse del cálculo de forma controlada. Las fuentes externas disponibles solo como abstract, snippet o metadatos pueden mostrarse como evidencia de revisión, pero no aumentan el porcentaje institucional.
+La búsqueda externa utiliza, según disponibilidad:
 
-## Intentos
+- OpenAlex;
+- CORE;
+- Semantic Scholar;
+- Crossref;
+- Brave Search para búsqueda web general.
 
-Cada estudiante dispone de:
-
-- **Ordinario: 3 intentos**.
-- **Supletorio: 3 intentos adicionales**.
-- Límite: **20 % en ambos procesos**.
-
-Cada intento queda ligado a una versión concreta del archivo y registra:
-
-- estudiante;
-- periodo;
-- versión;
-- Ordinario o Supletorio;
-- número de intento;
-- porcentaje consolidado;
-- Cumple / No cumple;
-- usuario que ejecutó el análisis;
-- fecha;
-- observación;
-- identificadores de los cuatro análisis utilizados.
-
-La primera versión que obtiene **Cumple** cierra el proceso. Los intentos anteriores permanecen en el historial institucional.
-
-Si se agotan los tres intentos Ordinarios sin Cumple, el sistema muestra **Pasa a Supletorio** y genera alertas internas. Los intentos adicionales no se habilitan automáticamente: el **Administrador** debe abrir el Supletorio del periodo.
+La validación semántica usa un proveedor compatible con OpenAI Chat Completions configurado exclusivamente para antiplagio. El modelo compara el texto objetivo contra contenido de fuentes ya localizadas; no recibe instrucciones de evaluación académica.
 
 ## Roles
 
 ### Estudiante
 
-El estudiante puede:
-
-- cargar su trabajo;
-- subir nuevas versiones mientras tenga intentos disponibles;
-- ejecutar el análisis completo;
-- ver su porcentaje exacto y Cumple/No cumple;
-- ver qué fragmentos debe corregir, por qué aparecen y qué acción se recomienda;
-- consultar alertas de similitud, citas, referencias, APA 7 y señales de escritura asistida.
-
-El estudiante **no accede al historial completo de intentos** ni al informe oficial institucional.
-
-Cuando una coincidencia proviene del repositorio interno, el estudiante no recibe el nombre, propietario ni texto de la obra institucional utilizada como fuente.
+Puede cargar PDF/DOCX, ejecutar su intento, ver el porcentaje, Cumple/No cumple y las coincidencias que debe corregir. Las fuentes institucionales se presentan de forma anonimizada.
 
 ### Coordinador
 
-El Coordinador puede:
-
-- cargar un trabajo en nombre de un estudiante;
-- subir nuevas versiones corregidas para el estudiante;
-- ejecutar el intento completo;
-- consultar el historial completo de versiones e intentos;
-- revisar evidencia interna y externa;
-- consultar citas, APA y señales de escritura asistida;
-- generar el informe oficial cuando una versión obtiene Cumple;
-- exportar el informe oficial a PDF y Excel.
-
-Aunque el Coordinador cargue el archivo, **el estudiante permanece como propietario del trabajo**.
+Puede consultar documentos, versiones, intentos, fuentes y evidencia de similitud, además de generar el informe oficial cuando una versión obtiene Cumple.
 
 ### Administrador
 
-El Administrador puede:
+Gestiona periodos, apertura de Ordinario/Supletorio, padrón institucional y roles. No existe un módulo de evaluadores académicos ni una revisión global de artículos.
 
-- crear y activar periodos;
-- abrir/cerrar Ordinario;
-- abrir/cerrar Supletorio;
-- asignar periodo, carrera y modalidad a estudiantes;
-- administrar roles.
+## Seguridad y trazabilidad
 
-La base de datos también dispone de funciones administrativas para controlar la inclusión/exclusión del repositorio institucional; esa gestión avanzada no forma parte todavía del panel visual principal.
+- Supabase Auth, PostgreSQL, RLS y Storage privado.
+- Versiones inmutables y SHA-256 del archivo.
+- Comparación institucional ejecutada en PostgreSQL.
+- Credenciales de proveedores únicamente en Supabase Edge Functions.
+- Las API keys nunca deben exponerse en variables `VITE_*`.
+- El informe oficial conserva identificadores de los análisis utilizados y huella SHA-256.
 
-## Flujo del estudiante
-
-```text
-Administrador asigna periodo + carrera + modalidad
-                    ↓
-Estudiante carga PDF/DOCX
-                    ↓
-Extracción + SHA-256 + versión
-                    ↓
-1. Similitud institucional segura
-                    ↓
-2. Similitud externa
-                    ↓
-3. Citas + referencias + APA 7
-                    ↓
-4. Señales de escritura asistida
-                    ↓
-Similitud consolidada ajustada
-                    ↓
-          ≤20 %             >20 %
-          Cumple           No cumple
-             ↓                 ↓
-     proceso cerrado     correcciones +
-                         nueva versión
-```
-
-## Repositorio institucional
-
-El corpus institucional no contiene todas las cargas intermedias. Solo incorpora la **versión final que obtuvo Cumple**.
-
-La comparación institucional se ejecuta en PostgreSQL para evitar entregar el corpus completo al equipo del estudiante. La lectura de resultados del estudiante está anonimizada.
-
-## Informe oficial
-
-El informe oficial:
-
-- solo puede generarse para una versión que obtuvo **Cumple**;
-- exige los cuatro módulos de análisis;
-- debe utilizar exactamente los identificadores de análisis registrados en el intento Cumple;
-- debe conservar el mismo porcentaje consolidado del intento;
-- se almacena como una instantánea inmutable;
-- recibe una huella SHA-256 calculada en el servidor;
-- se verifica en el servidor antes de permitir exportación;
-- los informes históricos solo se consideran verificables si además están ligados a un intento Cumple con la misma evidencia y porcentaje;
-- es de uso exclusivo de Coordinador/Administrador.
-
-El estudiante recibe su resultado y correcciones en la interfaz de PlagGuard, no el informe institucional completo.
-
-## Alertas
-
-Las alertas funcionan dentro de PlagGuard:
-
-- contador en la campana;
-- listado de alertas pendientes;
-- banner visible para la alerta prioritaria;
-- actualización automática durante la sesión;
-- actualización al volver a enfocar la aplicación;
-- alertas de Supletorio ligadas al periodo y al estudiante.
-
-Los avisos de espera de Supletorio se resuelven cuando el Administrador habilita el proceso correspondiente.
+La huella del archivo original se calcula actualmente en el cliente antes de la carga. Para una cadena de custodia de nivel forense, sigue siendo recomendable verificar también los bytes en un entorno de servidor controlado.
 
 ## Preparar Supabase
 
-En un proyecto nuevo, ejecuta **una sola vez y en este orden**:
+En un proyecto nuevo ejecuta las migraciones en este orden:
 
-1. `supabase/schema.sql`
-2. `supabase/phase2.sql`
-3. `supabase/phase3.sql`
-4. `supabase/phase4.sql`
-5. `supabase/phase5.sql`
-6. `supabase/phase6.sql`
-7. `supabase/phase7.sql`
-8. `supabase/phase8.sql`
-9. `supabase/phase9.sql`
-10. `supabase/phase10.sql`
-11. `supabase/phase11.sql`
-12. `supabase/phase12.sql`
-13. `supabase/phase13.sql`
-14. `supabase/phase14.sql`
-15. `supabase/phase15.sql`
-
-Las fases 10 y 12 contienen renombrados de funciones y deben tratarse como migraciones secuenciales, no como scripts para ejecutar repetidamente.
-
-Después asigna al menos una cuenta como Administrador. Por ejemplo:
-
-```sql
-update public.profiles
-set role = 'admin'
-where email = 'TU_CORREO';
+```text
+schema.sql
+phase2.sql
+phase3.sql
+phase4.sql
+phase5.sql
+phase6.sql
+phase7.sql
+phase8.sql
+phase9.sql
+phase9_role.sql
+phase10.sql
+phase11.sql
+phase12.sql
+phase13.sql
+phase14.sql
+phase15.sql
+phase16.sql
+phase18.sql
+phase19.sql
+phase20.sql
+phase21.sql
+phase22.sql
+phase23.sql
+phase24.sql
+phase25.sql
+phase26.sql
+phase27.sql
+phase28.sql
 ```
+
+No existe `phase17.sql`. La fase 28 actual retira de forma segura las tablas y funciones del antiguo revisor académico global. En instalaciones que aplicaron una versión anterior de la fase 28, vuelve a ejecutar la fase 28 actual para completar esa limpieza.
+
+Algunas tablas históricas conservan nombres internos anteriores por compatibilidad de trazabilidad. Eso no habilita detección de autoría por IA ni revisión académica.
 
 ## Edge Functions
 
-Despliega las tres funciones:
+Despliega las funciones de acceso/sincronización que utilice tu instalación y, para el antiplagio, asegúrate de desplegar:
 
 ```powershell
 supabase functions deploy external-similarity
+supabase functions deploy ai-semantic-similarity
 supabase functions deploy citation-integrity
-supabase functions deploy ai-writing-indicators
 ```
 
-Variables privadas de proveedores se configuran como secretos de Supabase/Edge Functions. Nunca deben almacenarse en Electron.
+La antigua función `article-review` y el detector `ai-writing-indicators` ya no forman parte de PlagGuard.
+
+## Secretos de proveedores
+
+```env
+OPENALEX_API_KEY=
+CORE_API_KEY=
+SEMANTIC_SCHOLAR_API_KEY=
+BRAVE_SEARCH_API_KEY=
+CROSSREF_MAILTO=
+
+PLAGIARISM_AI_API_URL=
+PLAGIARISM_AI_API_KEY=
+PLAGIARISM_AI_MODEL=
+```
+
+`PLAGIARISM_AI_API_URL` debe apuntar a un endpoint compatible con Chat Completions. El servidor valida las respuestas del modelo contra el texto real antes de incorporarlas como evidencia.
 
 ## Variables del renderer
 
@@ -231,10 +173,10 @@ npm run typecheck
 npm run build
 ```
 
-El workflow `.github/workflows/ci.yml` ejecuta instalación, typecheck/build y `deno check` de las tres Edge Functions en cada push a `main` y en cada pull request.
+El workflow de CI compila React/Electron y ejecuta `deno check` sobre las Edge Functions activas. GitHub Pages se publica desde `main`.
 
-## Importante antes de producción
+## Alcance del producto
 
-El código del repositorio y las migraciones deben mantenerse sincronizados. Un cambio en `main` que dependa de una fase nueva de Supabase no queda operativo en una instalación existente hasta aplicar esa migración y, cuando corresponda, desplegar nuevamente las Edge Functions.
+PlagGuard responde una sola pregunta institucional: **qué porcentaje de similitud verificable tiene este documento y de dónde provienen las coincidencias**.
 
-La huella SHA-256 del archivo original se calcula actualmente en el cliente antes de la carga. Para una cadena de custodia de nivel forense, queda como endurecimiento futuro verificar también los bytes del archivo en un entorno de servidor controlado.
+La evaluación académica del contenido pertenece a otro proceso y no forma parte de esta aplicación.
