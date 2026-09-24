@@ -1,6 +1,19 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
+// Supabase.ai existe en el Edge Runtime de Supabase. Esta declaración mantiene
+// el archivo verificable también con `deno check` fuera de ese runtime.
+declare const Supabase: {
+  ai: {
+    Session: new (model: string) => {
+      run: (
+        input: string,
+        options?: { mean_pool?: boolean; normalize?: boolean; stream?: boolean; timeout?: number },
+      ) => Promise<unknown>;
+    };
+  };
+};
+
 const ALGORITHM_VERSION = 'siai-external-ai-semantic-v2';
 const AI_SEMANTIC_VERSION = 'source-grounded-v1';
 const AI_SEMANTIC_MIN_SCORE = 84;
