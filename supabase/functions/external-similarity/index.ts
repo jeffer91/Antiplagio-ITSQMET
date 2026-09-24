@@ -1127,7 +1127,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     const merged = mergeCandidates(allCandidates);
-    let compared = merged.map((candidate) => ({
+    let compared: ComparedCandidate[] = merged.map((candidate) => ({
       ...compareCandidate(targetPrepared, candidate),
       metadata: { ...candidate.metadata, target_total_words: targetPrepared.tokens.length },
     }));
