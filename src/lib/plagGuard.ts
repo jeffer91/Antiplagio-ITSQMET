@@ -373,18 +373,6 @@ export function buildStudentCorrections(snapshot: IntegrityReportSnapshot): Stud
     });
   }
 
-  for (const segment of snapshot.ai_writing?.segments ?? []) {
-    corrections.push({
-      id: `assisted-${segment.segment_index}`,
-      category: 'assisted_writing',
-      fragment: compact(segment.excerpt),
-      source: 'Señales de escritura asistida',
-      reason: 'El fragmento presenta señales estilométricas que merecen revisión humana; esto no demuestra por sí solo uso de IA ni plagio.',
-      action: 'Revisa la redacción, asegúrate de comprender y poder sustentar el contenido, y conserva evidencia de autoría cuando sea necesario.',
-      affectsSimilarity: false,
-    });
-  }
-
   return corrections.slice(0, 80);
 }
 
